@@ -29,6 +29,7 @@ MEarth = 5.97237e24 # kg
 
 um = 1e-6 #for wavelengths in microns
 
+
 class RTModel:
     
     def __init__(self):
@@ -62,7 +63,7 @@ class RTModel:
                         self.parameters[line[0].rstrip()] = float(line[1])
                     except:
                         line[1].strip()
-                        self.parameters[line[0].rstrip()] = line[1][1:-1]
+                        self.parameters[line[0].rstrip()] = str(line[1][1:-1])
         return self.parameters
         
     @jit(nopython=True)
@@ -463,62 +464,6 @@ class RTModel:
     
         self.figure = fig
 
-#benchmarking with time
 
 
-start = time.time()
 
-model = RTModel()
-
-RTModel.get_parameters(model,'RTModel_Input_File.txt')
-
-RTModel.make_star(model)
-
-RTModel.make_dust(model)
-
-RTModel.make_disc(model)
-
-RTModel.read_optical_constants(model)
-
-sed_tot = np.zeros(model.sed_wave.shape)
-sed_ring = np.zeros((int(model.parameters['nring']),int(model.parameters['nwav'])))
-sed_wav = model.sed_wave
-
-dstar = model.parameters["dstar"]
-
-#loop over grain size and radius to calculate dust emission
-#calculate optical constants
-# x = 2.*np.pi*ag/wav
-# dust_nk = np.zeros(wav.shape,dtype='complex')
-# qabs = np.zeros(wav.shape)
-# for i in range(0,len(wav)):
-#     dust_nk[i] = complex(dust_n[i],dust_k[i])
-#     qext, qsca, qback, g = mpy.mie(dust_nk,x)
-#     qabs[i] = (qext - qsca)
-for ii in range(0,int(model.parameters['ngrain'])):  
-    x = 2.*np.pi*model.ag[ii]/model.sed_wave
-    qabs = np.zeros(model.sed_wave.shape)
-    qext, qsca, qback, g = mpy.mie(model.oc_nk,x)
-    qabs = (qext - qsca)
-    
-    for ij in range(0,int(model.parameters['nring'])):    
-        scalefactor = model.ng[ii]*model.scale[ij]*((model.ag[ii]*um)**2)/(model.parameters['dstar']*pc)**2
-        tdust = RTModel.calculate_dust_temperature(model,model.sed_star,model.ag[ii],qabs,model.radii[ij],blackbody=False,tolerance=0.01)        
-        sed_flx  = scalefactor * qabs * np.pi * RTModel.planck_lam(model.sed_wave*um, tdust)
-        sed_ring[ij,:] += sed_flx
-        
-        model.sed_disc += sed_flx  
-        
-#convert model fluxes from flam to fnu (in mJy) 
-convertfactor = 1e3*1e26*(sed_wav*um)**2 /c
-
-model.sed_rings = sed_ring*convertfactor
-model.sed_disc  = model.sed_disc*convertfactor
-model.sed_star  = model.sed_star*convertfactor
-model.sed_total = (model.sed_star + model.sed_disc)*convertfactor
-
-RTModel.make_sed(model)
-
-end = time.time()
-multi_time = end - start
-print("SED calculations took: ",multi_time," seconds.")
