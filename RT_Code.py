@@ -449,9 +449,9 @@ class RTModel:
         ax.loglog(self.sed_wave, self.sed_disc, color='black',linestyle='--')
         ax.loglog(self.sed_wave, self.sed_star, color='black',linestyle='-.')
         
-        for ij in range(0,model.parameters['nring']):
+        for ij in range(0,int(self.parameters['nring'])):
             ax.loglog(self.sed_wave,self.sed_rings[ij,:],linestyle='-',color='gray',alpha=0.1)
-        ax.loglog(self.sed_wave, self.sed_total, color='black',linestyle='-')
+        ax.loglog(self.sed_wave, (self.sed_star + self.sed_disc), color='black',linestyle='-')
         ax.set_xlabel(r'$\lambda$ ($\mu$m)')
         ax.set_ylabel(r'Flux density (mJy)')
         ax.set_xlim(self.parameters["lmin"],self.parameters["lmax"])

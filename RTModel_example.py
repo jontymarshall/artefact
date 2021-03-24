@@ -68,12 +68,12 @@ for ii in range(0,int(model.parameters['ngrain'])):
         model.sed_disc += sed_flx  
         
 #convert model fluxes from flam to fnu (in mJy) 
-convertfactor = 1e3*1e26*(sed_wav*um)**2 /c
+convertfactor = 1e3*1e26*(model.sed_wave*um)**2 /c
 
 model.sed_rings = sed_ring*convertfactor
 model.sed_disc  = model.sed_disc*convertfactor
 model.sed_star  = model.sed_star*convertfactor
-model.sed_total = (model.sed_star + model.sed_disc)*convertfactor
+model.sed_total = (model.sed_star + model.sed_disc)
 
 RTModel.make_sed(model)
 
