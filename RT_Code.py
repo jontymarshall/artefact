@@ -191,7 +191,10 @@ class RTModel:
                 
             func = interpolate.interp1d(lambdas,photosphere)
             photosphere = func(wavelengths)
-            
+        
+        elif smodel == 'function':
+            print("starfish model not yet implemented.")
+        
         self.sed_wave = wavelengths 
         self.sed_star = photosphere
         
@@ -426,9 +429,9 @@ class RTModel:
                 
                 #print(delta,td,dust_absr,dust_emit,radius,rdust)                
                 if radius < rdust :
-                    td = td + tstep
+                    td += tstep
                 else:
-                    td = td - tstep
+                    td -= tstep
                 
                 if delta < delta_last:
                     tstep = tstep/2.
