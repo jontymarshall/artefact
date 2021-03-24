@@ -459,7 +459,7 @@ class RTModel:
             ax.set_ylim(10**(np.log10(np.max(self.sed_disc)) - 4),10**(np.log10(np.max(self.sed_star)) + 1))
         else:
             ax.set_ylim(10**(np.log10(np.max(self.sed_star)) - 4),10**(np.log10(np.max(self.sed_disc)) + 1))    
-        fig.savefig(self.directory+self.prefix+'_sed.png',dpi=200)
+        fig.savefig(self.parameters['directory']+self.parameters['prefix']+'_sed.png',dpi=200)
         plt.close(fig)
     
         self.figure = fig
