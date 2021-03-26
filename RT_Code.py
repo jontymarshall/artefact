@@ -129,17 +129,9 @@ class RTModel:
     
     def make_star(self):
         """
-        
         Function to either create a star using a blackbody, or read in a 
         photosphere model.
         
-        Parameters
-        ----------
-        star_params : Dictionary
-             Stellar parameters.
-        model_params : Dictionary
-            Model parameters.
-    
         Returns
         -------
         wavelengths : float array
@@ -218,9 +210,9 @@ class RTModel:
     
         Returns
         -------
-        wavelengths : float array
+        wav_um : float array
             Wavelengths in microns in ascending order.
-        photosphere : float array
+        flx_mjy : float array
             Photospheric flux density in mJy in ascending order.
     
         
@@ -243,7 +235,14 @@ class RTModel:
     #set up power law size distribution for the dust model
     
     def make_dust(self): 
-        
+        """
+        Function to calculate dust grain sizes, numbers, and masses.
+
+        Returns
+        -------
+        None.
+
+        """
         amin = self.parameters['amin']
         amax = self.parameters['amax']
         rho  = self.parameters['density']
@@ -271,12 +270,6 @@ class RTModel:
         """
         Function to read in optical constants from a text file.
         
-        
-        Parameters
-        ----------
-        dust_params : Dictionary
-             Dust parameters.
-    
         Returns
         -------
         dl : float array
@@ -309,13 +302,9 @@ class RTModel:
 
     
     def make_disc(self):
-        """
+        """    
+        Function to make up the radial dust density distribution.
         
-        Parameters
-        ----------
-        disc_params : Dictionary
-            Disc architecture parameters.
-    
         Returns
         -------
         scale : Float array
@@ -378,6 +367,8 @@ class RTModel:
     #@jit(nopython=True)
     def calculate_dust_temperature(self,radius,qabs,blackbody=False,tolerance=0.01):
         """
+        Function to calculate the temperature of a dust grain at a given distance from the star.
+        
         Parameters
         ----------
         radius : Float
