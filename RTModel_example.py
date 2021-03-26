@@ -55,13 +55,12 @@ dstar = model.parameters["dstar"]
 #     qabs[i] = (qext - qsca)
 for ii in range(0,int(model.parameters['ngrain'])):  
     x = 2.*np.pi*model.ag[ii]/model.sed_wave
-    qabs = np.zeros(model.sed_wave.shape)
     qext, qsca, qback, g = mpy.mie(model.oc_nk,x)
     qabs = (qext - qsca)
     
     for ij in range(0,int(model.parameters['nring'])):    
         scalefactor = model.ng[ii]*model.scale[ij]*((model.ag[ii]*um)**2)/(model.parameters['dstar']*pc)**2
-        tdust = RTModel.calculate_dust_temperature(model,model.sed_star,model.ag[ii],qabs,model.radii[ij],blackbody=False,tolerance=0.01)        
+        tdust = RTModel.calculate_dust_temperature(model,model.radii[ij],qabs,blackbody=False,tolerance=0.01)        
         sed_flx  = scalefactor * qabs * np.pi * RTModel.planck_lam(model.sed_wave*um, tdust)
         sed_ring[ij,:] += sed_flx
         

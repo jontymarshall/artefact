@@ -66,7 +66,7 @@ class RTModel:
                         self.parameters[line[0].rstrip()] = str(line[1][1:-1])
         return self.parameters
         
-    @jit(nopython=True)
+    @jit(nopython=True,cache=True)
     def planck_lam(wav, T):
         """
         Parameters
@@ -86,7 +86,7 @@ class RTModel:
         intensity = a/ ( (wav**5) * (np.exp(b) - 1.0) )
         return intensity
     
-    @jit(nopython=True)
+    @jit(nopython=True,cache=True)
     def planck_nu(freq, T):
         """
         Parameters
@@ -374,23 +374,16 @@ class RTModel:
         self.radii = radii 
         
         #return scale, radii
-        
-    def calculate_dust_temperature(self,pht,ag,qabs,radius,blackbody=False,tolerance=0.01):
+    
+    #@jit(nopython=True)
+    def calculate_dust_temperature(self,radius,qabs,blackbody=False,tolerance=0.01):
         """
         Parameters
         ----------
-        dust_params : Dictionary
-            Disc architecture parameters.
-        star_params : Dictionary
-            Stellar parameters.
-        pht : Float array
-            Stellar photospheric emission.
-        ag : Float
-            Grain size in microns.
+        radius : Float
+            Element of self.radii to fit temperature for.
         qabs : Float array
             Absorption coefficients for grain size ag across all wavelengths.
-        radius : Float
-            Stellocentric distance in au.
         blackbody : True/False
             Keyword for implementing iterative dust temperature calculation.
         tolerance :
@@ -414,15 +407,16 @@ class RTModel:
             tstep = 50.0 #go for a big step to start with to speed things up if our inital guess is bad
             
             delta = 1e30
-            nsteps = 0
+            #nsteps = 0
+            factor = 2.0*((rstar*rsol)/au)
+            dust_absr = integrate.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
             
             while delta > tolerance: 
                 
-                dust_absr = integrate.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
                 
                 dust_emit = integrate.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,td),self.sed_wave*um)
                 
-                rdust = 2.0*((rstar*rsol)/au)*(dust_absr/dust_emit)**0.5
+                rdust = factor*(dust_absr/dust_emit)**0.5
     
                 delta_last = delta
                 delta = abs(radius - rdust) / radius
@@ -436,11 +430,11 @@ class RTModel:
                 if delta < delta_last:
                     tstep = tstep/2.
                 
-                nsteps += 1
+                #nsteps += 1
                 
-                if nsteps >= 50:
-                    print("Iterative search for best-fit temperature failed after ",nsteps," steps.")
-                    break
+                #if nsteps >= 50:
+                #    print("Iterative search for best-fit temperature failed after ",nsteps," steps.")
+                #    break
             #print(nsteps-1)
             return td
     
