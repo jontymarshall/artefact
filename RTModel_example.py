@@ -34,7 +34,8 @@ def make_sed(m):
     ax.loglog(m.sed_wave, m.sed_star, color='black',linestyle='-.')
     
     for ij in range(0,int(m.parameters['nring'])):
-        ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='gray',alpha=0.1)
+        ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='orange',alpha=0.1)
+        ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.1)
     ax.loglog(m.sed_wave, m.sed_star + m.sed_emit + m.sed_scat, color='black',linestyle='-')
     ax.set_xlabel(r'$\lambda$ ($\mu$m)')
     ax.set_ylabel(r'Flux density (mJy)')
@@ -65,7 +66,7 @@ RTModel.read_optical_constants(model)
 
 RTModel.calculate_dust_emission(model,blackbody=False,tolerance=0.01)
 
-RTModel.calculate_dust_scatter(model)
+#RTModel.calculate_dust_scatter(model)
 
 make_sed(model)
 
