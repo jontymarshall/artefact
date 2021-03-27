@@ -32,11 +32,9 @@ class RTModel:
     def __init__(self):
         print("Instantiated radiative transfer model object.")
         self.parameters = {}
-        self.sed_wave = 0.
-        self.sed_disc = 0.
-        self.sed_star = 0.
-        self.sed_total = None
-
+        self.sed_disc = 0.0 
+        self.sed_star = 0.0
+        self.sed_wave = 0.0
     def get_parameters(self,filename):
         """
         Parameters
@@ -185,7 +183,7 @@ class RTModel:
             print("starfish model not yet implemented.")
         
         self.sed_wave = wavelengths 
-        self.sed_star = photosphere
+        self.sed_star = photosphere*1e3*1e26*(self.sed_wave*um)**2 /c
         
         return wavelengths, photosphere
 
@@ -445,11 +443,7 @@ class RTModel:
 
         self.sed_rings = self.sed_rings*convertfactor
         self.sed_scat  = np.sum(self.sed_rings,axis=0)
-        self.sed_disc  += self.sed_scat
-        if self.sed_total == None: 
-            self.sed_total = self.sed_disc + self.sed_star*convertfactor            
-        else: 
-            self.sed_total += self.sed_scat        
+        self.sed_disc  += self.sed_scat   
 
     def calculate_dust_emission(self,blackbody=False,tolerance=0.01):
         """
@@ -481,8 +475,3 @@ class RTModel:
         self.sed_ringe = self.sed_ringe*convertfactor
         self.sed_emit  = np.sum(self.sed_ringe,axis=0)
         self.sed_disc  += self.sed_emit*convertfactor
-        self.sed_star  = self.sed_star*convertfactor
-        if self.sed_total == None :
-            self.sed_total = (self.sed_star + self.sed_emit)
-        else: 
-            self.sed_total += self.sed_emit

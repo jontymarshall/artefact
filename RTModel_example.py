@@ -30,19 +30,19 @@ def make_sed(m):
 
     ax.loglog(m.sed_wave, m.sed_emit, color='red',linestyle=':')
     ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')    
-    ax.loglog(m.sed_wave, m.sed_disc, color='black',linestyle='--')
+    ax.loglog(m.sed_wave, (m.sed_emit + m.sed_scat), color='black',linestyle='--')
     ax.loglog(m.sed_wave, m.sed_star, color='black',linestyle='-.')
     
     for ij in range(0,int(m.parameters['nring'])):
         ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='gray',alpha=0.1)
-    ax.loglog(m.sed_wave, m.sed_total, color='black',linestyle='-')
+    ax.loglog(m.sed_wave, m.sed_star + m.sed_emit + m.sed_scat, color='black',linestyle='-')
     ax.set_xlabel(r'$\lambda$ ($\mu$m)')
     ax.set_ylabel(r'Flux density (mJy)')
     ax.set_xlim(m.parameters["lmin"],m.parameters["lmax"])
-    if np.max(m.sed_star) > np.max(m.sed_disc):
-        ax.set_ylim(10**(np.log10(np.max(m.sed_disc)) - 4),10**(np.log10(np.max(m.sed_star)) + 1))
+    if np.max(m.sed_star) > np.max((m.sed_emit + m.sed_scat)):
+        ax.set_ylim(10**(np.log10(np.max((m.sed_emit + m.sed_scat))) - 4),10**(np.log10(np.max(m.sed_star)) + 1))
     else:
-        ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 4),10**(np.log10(np.max(m.sed_disc)) + 1))    
+        ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 4),10**(np.log10(np.max((m.sed_emit + m.sed_scat))) + 1))    
     fig.savefig(m.parameters['directory']+m.parameters['prefix']+'_sed.png',dpi=200)
     plt.close(fig)
 
