@@ -35,6 +35,7 @@ class RTModel:
         self.sed_wave = 0.
         self.sed_disc = 0.
         self.sed_star = 0.
+        self.sed_total = None
 
     def get_parameters(self,filename):
         """
@@ -420,7 +421,68 @@ class RTModel:
                 #    break
             #print(nsteps-1)
             return td
+        
+    def calculate_dust_scatter(self):
+        """
+        Function to calculate the scattered light contribution to the total emission from the disc.
+           
+        """
+        
+        self.sed_rings = np.zeros((int(self.parameters['nring']),int(self.parameters['nwav']))) 
+        
+        for ii in range(0,int(self.parameters['ngrain'])):  
+            x = 2.*np.pi*self.ag[ii]/self.sed_wave
+            qext, qsca, qback, g = mpy.mie(self.oc_nk,x)
+            qabs = (qext - qsca)
+            alb  = qsca/qext 
+            scalefactor = qsca*alb*self.ng[ii]*((self.ag[ii]*um)**2)
+            for ij in range(0,int(self.parameters['nring'])):
+                scalefactor = scalefactor*self.scale[ij]/(2.*self.radii[ij]*au)**2
+                self.sed_rings[ij,:] = scalefactor * self.sed_star
+        
+        #convert model fluxes from flam to fnu (in mJy) 
+        convertfactor = 1e3*1e26*(self.sed_wave*um)**2 /c
 
+        self.sed_rings = self.sed_rings*convertfactor
+        self.sed_scat  = np.sum(self.sed_rings,axis=0)
+        self.sed_disc  += self.sed_scat
+        if self.sed_total == None: 
+            self.sed_total = self.sed_disc + self.sed_star*convertfactor            
+        else: 
+            self.sed_total += self.sed_scat        
 
+    def calculate_dust_emission(self,blackbody=False,tolerance=0.01):
+        """
+        Function to calculate the continuum emission contribution to the total emission from the disc.
+        
+        Parameters
+        ----------
+        blackbody : True/False
+            Keyword for implementing iterative dust temperature calculation.
+        tolerance :
+            Maximum allowed difference between computed radius and ring element
+        
+        """
+        
+        self.sed_ringe = np.zeros((int(self.parameters['nring']),int(self.parameters['nwav']))) 
+        
+        for ii in range(0,int(self.parameters['ngrain'])):  
+            x = 2.*np.pi*self.ag[ii]/self.sed_wave
+            qext, qsca, qback, g = mpy.mie(self.oc_nk,x)
+            qabs = (qext - qsca)
+            for ij in range(0,int(self.parameters['nring'])):
+                scalefactor = self.ng[ii]*self.scale[ij]*((self.ag[ii]*um)**2)/(self.parameters['dstar']*pc)**2
+                tdust = RTModel.calculate_dust_temperature(self,self.radii[ij],qabs,blackbody=False,tolerance=0.01)
+                self.sed_ringe[ij,:] = scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
+        
+        #convert model fluxes from flam to fnu (in mJy) 
+        convertfactor = 1e3*1e26*(self.sed_wave*um)**2 /c
 
-
+        self.sed_ringe = self.sed_ringe*convertfactor
+        self.sed_emit  = np.sum(self.sed_ringe,axis=0)
+        self.sed_disc  += self.sed_emit*convertfactor
+        self.sed_star  = self.sed_star*convertfactor
+        if self.sed_total == None :
+            self.sed_total = (self.sed_star + self.sed_emit)
+        else: 
+            self.sed_total += self.sed_emit

@@ -14,7 +14,7 @@ from RT_Code import RTModel
 h = 6.626e-34
 c = 299792458.0 # m/s
 k = 1.38e-23
-sb = 5.67e-8 #
+sb = 5.67e-8 # 
 au     = 1.495978707e11 # m 
 pc     = 3.0857e16 # m
 lsol   = 3.828e26 # W
@@ -27,13 +27,15 @@ um = 1e-6 #for wavelengths in microns
 def make_sed(m): 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    
+
+    ax.loglog(m.sed_wave, m.sed_emit, color='red',linestyle=':')
+    ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')    
     ax.loglog(m.sed_wave, m.sed_disc, color='black',linestyle='--')
     ax.loglog(m.sed_wave, m.sed_star, color='black',linestyle='-.')
     
     for ij in range(0,int(m.parameters['nring'])):
-        ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='gray',alpha=0.1)
-    ax.loglog(m.sed_wave, (m.sed_star + m.sed_disc), color='black',linestyle='-')
+        ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='gray',alpha=0.1)
+    ax.loglog(m.sed_wave, m.sed_total, color='black',linestyle='-')
     ax.set_xlabel(r'$\lambda$ ($\mu$m)')
     ax.set_ylabel(r'Flux density (mJy)')
     ax.set_xlim(m.parameters["lmin"],m.parameters["lmax"])
@@ -61,41 +63,9 @@ RTModel.make_disc(model)
 
 RTModel.read_optical_constants(model)
 
-sed_tot = np.zeros(model.sed_wave.shape)
-sed_ring = np.zeros((int(model.parameters['nring']),int(model.parameters['nwav'])))
-sed_wav = model.sed_wave
+RTModel.calculate_dust_emission(model,blackbody=False,tolerance=0.01)
 
-dstar = model.parameters["dstar"]
-
-#loop over grain size and radius to calculate dust emission
-#calculate optical constants
-# x = 2.*np.pi*ag/wav
-# dust_nk = np.zeros(wav.shape,dtype='complex')
-# qabs = np.zeros(wav.shape)
-# for i in range(0,len(wav)):
-#     dust_nk[i] = complex(dust_n[i],dust_k[i])
-#     qext, qsca, qback, g = mpy.mie(dust_nk,x)
-#     qabs[i] = (qext - qsca)
-for ii in range(0,int(model.parameters['ngrain'])):  
-    x = 2.*np.pi*model.ag[ii]/model.sed_wave
-    qext, qsca, qback, g = mpy.mie(model.oc_nk,x)
-    qabs = (qext - qsca)
-    for ij in range(0,int(model.parameters['nring'])):
-        radius = model.radii[ij]
-        scalefactor = model.ng[ii]*model.scale[ij]*((model.ag[ii]*um)**2)/(model.parameters['dstar']*pc)**2
-        tdust = RTModel.calculate_dust_temperature(model,radius,qabs,blackbody=False,tolerance=0.01)        
-        sed_flx  = scalefactor * qabs * np.pi * RTModel.planck_lam(model.sed_wave*um, tdust)
-        sed_ring[ij,:] += sed_flx
-        
-        model.sed_disc += sed_flx  
-        
-#convert model fluxes from flam to fnu (in mJy) 
-convertfactor = 1e3*1e26*(model.sed_wave*um)**2 /c
-
-model.sed_rings = sed_ring*convertfactor
-model.sed_disc  = model.sed_disc*convertfactor
-model.sed_star  = model.sed_star*convertfactor
-model.sed_total = (model.sed_star + model.sed_disc)
+RTModel.calculate_dust_scatter(model)
 
 make_sed(model)
 
