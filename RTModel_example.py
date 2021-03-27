@@ -23,6 +23,29 @@ MEarth = 5.97237e24 # kg
 
 um = 1e-6 #for wavelengths in microns
 
+#plot the sed
+def make_sed(m): 
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    
+    ax.loglog(m.sed_wave, m.sed_disc, color='black',linestyle='--')
+    ax.loglog(m.sed_wave, m.sed_star, color='black',linestyle='-.')
+    
+    for ij in range(0,int(m.parameters['nring'])):
+        ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='gray',alpha=0.1)
+    ax.loglog(m.sed_wave, (m.sed_star + m.sed_disc), color='black',linestyle='-')
+    ax.set_xlabel(r'$\lambda$ ($\mu$m)')
+    ax.set_ylabel(r'Flux density (mJy)')
+    ax.set_xlim(m.parameters["lmin"],m.parameters["lmax"])
+    if np.max(m.sed_star) > np.max(m.sed_disc):
+        ax.set_ylim(10**(np.log10(np.max(m.sed_disc)) - 4),10**(np.log10(np.max(m.sed_star)) + 1))
+    else:
+        ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 4),10**(np.log10(np.max(m.sed_disc)) + 1))    
+    fig.savefig(m.parameters['directory']+m.parameters['prefix']+'_sed.png',dpi=200)
+    plt.close(fig)
+
+    m.figure = fig
+
 #benchmarking with time
 start = time.time()
 
@@ -57,10 +80,10 @@ for ii in range(0,int(model.parameters['ngrain'])):
     x = 2.*np.pi*model.ag[ii]/model.sed_wave
     qext, qsca, qback, g = mpy.mie(model.oc_nk,x)
     qabs = (qext - qsca)
-    
-    for ij in range(0,int(model.parameters['nring'])):    
+    for ij in range(0,int(model.parameters['nring'])):
+        radius = model.radii[ij]
         scalefactor = model.ng[ii]*model.scale[ij]*((model.ag[ii]*um)**2)/(model.parameters['dstar']*pc)**2
-        tdust = RTModel.calculate_dust_temperature(model,model.radii[ij],qabs,blackbody=False,tolerance=0.01)        
+        tdust = RTModel.calculate_dust_temperature(model,radius,qabs,blackbody=False,tolerance=0.01)        
         sed_flx  = scalefactor * qabs * np.pi * RTModel.planck_lam(model.sed_wave*um, tdust)
         sed_ring[ij,:] += sed_flx
         
@@ -74,7 +97,7 @@ model.sed_disc  = model.sed_disc*convertfactor
 model.sed_star  = model.sed_star*convertfactor
 model.sed_total = (model.sed_star + model.sed_disc)
 
-RTModel.make_sed(model)
+make_sed(model)
 
 end = time.time()
 multi_time = end - start

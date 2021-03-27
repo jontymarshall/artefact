@@ -7,14 +7,11 @@ Created on Fri Dec  4 11:42:22 2020
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import miepython as mpy
 import pathos.multiprocessing as mp
 from numba import jit
 import time
 from astropy.io import ascii
-from scipy import interpolate
-from scipy import integrate
 
 #constants
 h = 6.626e-34
@@ -125,8 +122,8 @@ class RTModel:
         lphot= (4.0*np.pi*sb*(rstar*rsol)**2*tstar**4) / lsol
         
         return lphot
-        
-    
+         
+    #@jit(nopython=True,cache=True)
     def make_star(self):
         """
         Function to either create a star using a blackbody, or read in a 
@@ -181,8 +178,7 @@ class RTModel:
                 photosphere = np.append(photosphere,interp_pht_arr)
                 lambdas = np.append(lambdas,interp_lam_arr)
                 
-            func = interpolate.interp1d(lambdas,photosphere)
-            photosphere = func(wavelengths)
+            photosphere = np.interp(wavelengths,lambdas,photosphere)
         
         elif smodel == 'function':
             print("starfish model not yet implemented.")
@@ -289,11 +285,8 @@ class RTModel:
         dn = data["col2"].data
         dk = data["col3"].data
         
-        func = interpolate.interp1d(dl,dn)
-        dust_n = func(self.sed_wave)
-        func = interpolate.interp1d(dl,dk)
-        dust_k = func(self.sed_wave)
-        
+        dust_n = np.interp(self.sed_wave,dl,dn)
+        dust_k = np.interp(self.sed_wave,dl,dk)        
         dust_nk = dust_n - 1j*np.abs(dust_k)
         
         self.oc_nk  = dust_nk
@@ -378,7 +371,7 @@ class RTModel:
         blackbody : True/False
             Keyword for implementing iterative dust temperature calculation.
         tolerance :
-            Value to iterate towards
+            Maximum allowed difference between computed radius and ring element
         
         Returns
         -------
@@ -389,7 +382,7 @@ class RTModel:
         lstar = self.parameters["lstar"]
         rstar = self.parameters["rstar"]
         tstar = self.parameters["tstar"]
-        
+                
         if blackbody == True:
             td = 278.*(lstar**0.25)*(radius**(-0.5))
             return td
@@ -400,12 +393,11 @@ class RTModel:
             delta = 1e30
             #nsteps = 0
             factor = 2.0*((rstar*rsol)/au)
-            dust_absr = integrate.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
+            dust_absr = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
             
             while delta > tolerance: 
                 
-                
-                dust_emit = integrate.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,td),self.sed_wave*um)
+                dust_emit = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,td),self.sed_wave*um)
                 
                 rdust = factor*(dust_absr/dust_emit)**0.5
     
@@ -428,29 +420,6 @@ class RTModel:
                 #    break
             #print(nsteps-1)
             return td
-    
-    #plot the sed
-    def make_sed(self): 
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        
-        ax.loglog(self.sed_wave, self.sed_disc, color='black',linestyle='--')
-        ax.loglog(self.sed_wave, self.sed_star, color='black',linestyle='-.')
-        
-        for ij in range(0,int(self.parameters['nring'])):
-            ax.loglog(self.sed_wave,self.sed_rings[ij,:],linestyle='-',color='gray',alpha=0.1)
-        ax.loglog(self.sed_wave, (self.sed_star + self.sed_disc), color='black',linestyle='-')
-        ax.set_xlabel(r'$\lambda$ ($\mu$m)')
-        ax.set_ylabel(r'Flux density (mJy)')
-        ax.set_xlim(self.parameters["lmin"],self.parameters["lmax"])
-        if np.max(self.sed_star) > np.max(self.sed_disc):
-            ax.set_ylim(10**(np.log10(np.max(self.sed_disc)) - 4),10**(np.log10(np.max(self.sed_star)) + 1))
-        else:
-            ax.set_ylim(10**(np.log10(np.max(self.sed_star)) - 4),10**(np.log10(np.max(self.sed_disc)) + 1))    
-        fig.savefig(self.parameters['directory']+self.parameters['prefix']+'_sed.png',dpi=200)
-        plt.close(fig)
-    
-        self.figure = fig
 
 
 
