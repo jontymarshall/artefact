@@ -41,9 +41,9 @@ def make_sed(m):
     ax.set_ylabel(r'Flux density (mJy)')
     ax.set_xlim(m.parameters["lmin"],m.parameters["lmax"])
     if np.max(m.sed_star) > np.max((m.sed_emit + m.sed_scat)):
-        ax.set_ylim(10**(np.log10(np.max((m.sed_emit + m.sed_scat))) - 4),10**(np.log10(np.max(m.sed_star)) + 1))
+        ax.set_ylim(10**(np.log10(np.max((m.sed_emit + m.sed_scat))) - 6),10**(np.log10(np.max(m.sed_star)) + 1))
     else:
-        ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 4),10**(np.log10(np.max((m.sed_emit + m.sed_scat))) + 1))    
+        ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 6),10**(np.log10(np.max((m.sed_emit + m.sed_scat))) + 1))    
     fig.savefig(m.parameters['directory']+m.parameters['prefix']+'_sed.png',dpi=200)
     plt.close(fig)
 
@@ -56,6 +56,8 @@ model = RTModel()
 
 RTModel.get_parameters(model,'RTModel_Input_File.txt')
 
+model.parameters['mdust'] = 1e-3
+
 RTModel.make_star(model)
 
 RTModel.make_dust(model)
@@ -64,9 +66,11 @@ RTModel.make_disc(model)
 
 RTModel.read_optical_constants(model)
 
+RTModel.calculate_qabs(model)
+
 RTModel.calculate_dust_emission(model,blackbody=False,tolerance=0.01)
 
-#RTModel.calculate_dust_scatter(model)
+RTModel.calculate_dust_scatter(model)
 
 make_sed(model)
 
