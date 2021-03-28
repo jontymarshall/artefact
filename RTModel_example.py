@@ -27,15 +27,24 @@ um = 1e-6 #for wavelengths in microns
 def make_sed(m): 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
+    
+    try:
+        ax.loglog(m.sed_wave, m.sed_emit, color='red',linestyle=':')
+        for ij in range(0,int(m.parameters['nring'])):
+            ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='orange',alpha=0.1)
+    except:
+        print("No continuum emission model.")
+    
+    try:
+        ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')
+        for ij in range(0,int(m.parameters['nring'])):  
+            ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.1    
+    except:
+        print("No scattered light model.")
 
-    ax.loglog(m.sed_wave, m.sed_emit, color='red',linestyle=':')
-    ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')    
     ax.loglog(m.sed_wave, (m.sed_emit + m.sed_scat), color='black',linestyle='--')
     ax.loglog(m.sed_wave, m.sed_star, color='black',linestyle='-.')
     
-    for ij in range(0,int(m.parameters['nring'])):
-        ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='orange',alpha=0.1)
-        ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.1)
     ax.loglog(m.sed_wave, m.sed_star + m.sed_emit + m.sed_scat, color='black',linestyle='-')
     ax.set_xlabel(r'$\lambda$ ($\mu$m)')
     ax.set_ylabel(r'Flux density (mJy)')
