@@ -165,7 +165,7 @@ class RTModel:
             photosphere = (lstar/lphot)*photosphere
             
         elif smodel == 'spectrum':
-            lambdas,photosphere = read_star(self)
+            lambdas,photosphere = RTModel.read_star(self)
     
             lmin = self.parameters['lmin']
             lmax = self.parameters['lmax']
@@ -412,7 +412,7 @@ class RTModel:
                     td -= tstep
                 
                 if delta < delta_last:
-                    tstep = tstep/2.
+                    if tstep > 0.1 : tstep = tstep/2.
                 
                 #nsteps += 1
                 

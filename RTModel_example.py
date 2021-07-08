@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import miepython as mpy
+import miepython.miepython as mpy
 import pathos.multiprocessing as mp
-from numba import jit
 import time
 from astropy.io import ascii
 from scipy import interpolate
@@ -38,7 +37,7 @@ def make_sed(m):
     try:
         ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')
         for ij in range(0,int(m.parameters['nring'])):  
-            ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.1    
+            ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.1)
     except:
         print("No scattered light model.")
 
@@ -65,7 +64,13 @@ model = RTModel()
 
 RTModel.get_parameters(model,'RTModel_Input_File.txt')
 
-model.parameters['mdust'] = 1e-3
+model.parameters['directory'] = '/Users/jonty/Desktop/'
+model.parameters['prefix'] = 'test_1_'
+model.parameters['stype'] = 'blackbody'
+model.parameters['tstar'] = 10000.0
+model.parameters['rstar'] = 2.2
+model.parameters['lstar'] = (4*np.pi*5.67e-8*(model.parameters['rstar'])**2*(model.parameters['tstar'])**4) / lsol
+
 
 RTModel.make_star(model)
 
