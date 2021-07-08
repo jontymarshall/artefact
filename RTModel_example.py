@@ -53,6 +53,7 @@ def make_sed(m):
     else:
         ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 6),10**(np.log10(np.max((m.sed_emit + m.sed_scat))) + 1))    
     fig.savefig(m.parameters['directory']+m.parameters['prefix']+'_sed.png',dpi=200)
+    
     plt.close(fig)
 
     m.figure = fig
@@ -69,7 +70,7 @@ model.parameters['prefix'] = 'test_1_'
 model.parameters['stype'] = 'blackbody'
 model.parameters['tstar'] = 10000.0
 model.parameters['rstar'] = 2.2
-model.parameters['lstar'] = (4*np.pi*5.67e-8*(model.parameters['rstar'])**2*(model.parameters['tstar'])**4) / lsol
+model.parameters['lstar'] = (4*np.pi*5.67e-8*(model.parameters['rstar']*rsol)**2*(model.parameters['tstar'])**4) / lsol
 
 
 RTModel.make_star(model)

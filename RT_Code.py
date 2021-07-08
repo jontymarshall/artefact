@@ -139,13 +139,10 @@ class RTModel:
     
         """
         
-        
-        smodel = self.parameters['stype'] 
-            
-        if smodel != 'blackbody' and smodel != 'spectrum' :
+        if self.parameters['stype'] != 'blackbody' and self.parameters['stype'] != 'spectrum' :
             print("Input 'stype' must be one of 'blackbody' or 'spectrum'.")
     
-        if smodel == 'blackbody':
+        if self.parameters['stype'] == 'blackbody':
             lstar = self.parameters['lstar']
             rstar = self.parameters['rstar']
             tstar = self.parameters['tstar']
@@ -162,10 +159,12 @@ class RTModel:
             lphot = RTModel.calc_luminosity(rstar,tstar)
             print("Stellar model has a luminosity of: ",lphot," L_sol")
             
-            photosphere = (lstar/lphot)*photosphere
+            self.parameters['lstar'] = lphot
             
-        elif smodel == 'spectrum':
-            lambdas,photosphere = RTModel.read_star(self)
+            photosphere = photosphere*1e3*1e26#*(self.sed_wave*um)**2 /c
+            
+        elif self.parameters['stype'] == 'spectrum':
+            lambdas,photosphere = RTModel.read_star(self) #returns wavelength, stellar spectrum in um, mJy
     
             lmin = self.parameters['lmin']
             lmax = self.parameters['lmax']
@@ -180,15 +179,12 @@ class RTModel:
                 lambdas = np.append(lambdas,interp_lam_arr)
                 
             photosphere = np.interp(wavelengths,lambdas,photosphere)
-        
+            
         elif smodel == 'function':
             print("starfish model not yet implemented.")
         
         self.sed_wave = wavelengths 
-        self.sed_star = photosphere*1e3*1e26*(self.sed_wave*um)**2 /c
-        
-        return wavelengths, photosphere
-
+        self.sed_star = photosphere
     
     def read_star(self):
         """
@@ -388,9 +384,9 @@ class RTModel:
             td = 278.*(lstar**0.25)*(radius**(-0.5))
             return td
         else:
-            td = 100.0 #inital guess temperature- this is in the mid-range for most debris discs (~30 - 300 K)
-            tstep = 50.0 #go for a big step to start with to speed things up if our inital guess is bad
-            
+            td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature- this is in the mid-range for most debris discs (~30 - 300 K)
+            tstep = 0.10*td #go for a big step to start with to speed things up if our inital guess is bad
+            #print(lstar,rstar,tstar,radius,td,tstep)
             delta = 1e30
             #nsteps = 0
             factor = 2.0*((rstar*rsol)/au)
@@ -411,15 +407,9 @@ class RTModel:
                 else:
                     td -= tstep
                 
-                if delta < delta_last:
-                    if tstep > 0.1 : tstep = tstep/2.
-                
-                #nsteps += 1
-                
-                #if nsteps >= 50:
-                #    print("Iterative search for best-fit temperature failed after ",nsteps," steps.")
-                #    break
-            #print(nsteps-1)
+                if delta < delta_last and tstep > 0.1:
+                    tstep = tstep/2.
+            
             return td
  
     def calculate_qabs(self):
