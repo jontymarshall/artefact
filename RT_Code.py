@@ -153,7 +153,8 @@ class RTModel:
             nwav = int(self.parameters['nwav'])
             
             wavelengths = np.logspace(np.log10(lmin),np.log10(lmax),num=nwav,base=10.0,endpoint=True) #um
-            photosphere = RTModel.planck_lam(wavelengths*um,tstar) # W/m2/sr/m
+            #photosphere = RTModel.planck_lam(wavelengths*um,tstar) # W/m2/sr/m
+            photosphere = RTModel.planck_nu(c/(wavelengths*um),tstar) # W/m2/sr/m
             photosphere = np.pi * photosphere * ((rstar*rsol)/(dstar*pc))**2 # W/m2/m
             
             lphot = RTModel.calc_luminosity(rstar,tstar)
@@ -161,7 +162,7 @@ class RTModel:
             
             self.parameters['lstar'] = lphot
             
-            photosphere = photosphere*1e3*1e26#*(self.sed_wave*um)**2 /c
+            photosphere = photosphere*1e26*1e3#*(self.sed_wave*um)**2 /c
             
         elif self.parameters['stype'] == 'spectrum':
             lambdas,photosphere = RTModel.read_star(self) #returns wavelength, stellar spectrum in um, mJy
@@ -221,7 +222,7 @@ class RTModel:
         model_spect =  data['Flux'].data #Ergs/cm**2/s/A -> 10^-7 * 10^4 * 10^10 W/m^2/Hz/m
         
         wav_um = wavelengths * 1e-4
-        flx_mjy =  model_spect * (c/wavelengths**2) * 1e-3 * ((rstar*rsol)/ (dstar*pc))**2 #coversion to Flam units
+        flx_mjy =  model_spect * (c/wavelengths**2) * 1e3 * ((rstar*rsol)/ (dstar*pc))**2 #coversion to Flam units
         
         return wav_um,flx_mjy
 
@@ -379,17 +380,20 @@ class RTModel:
         lstar = self.parameters["lstar"]
         rstar = self.parameters["rstar"]
         tstar = self.parameters["tstar"]
-                
+        
+        if mode != 'bb' and mode != 'full':
+            print("Dust temperature calculation mode must be one of 'bb' or 'full'.")
+        
         if mode == 'bb':
             td = 278.*(lstar**0.25)*(radius**(-0.5))
             print(td)
             return td
         else:
-            td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature- this is in the mid-range for most debris discs (~30 - 300 K)
-            tstep = 0.10*td #go for a big step to start with to speed things up if our inital guess is bad
-            #print(lstar,rstar,tstar,radius,td,tstep)
+            td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature
+            tstep = 0.20*td #go for a big step to start with to speed things up if our inital guess is bad
+            
             delta = 1e30
-            #nsteps = 0
+            
             factor = 2.0*((rstar*rsol)/au)
             dust_absr = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
             
@@ -402,13 +406,12 @@ class RTModel:
                 delta_last = delta
                 delta = abs(radius - rdust) / radius
                 
-                #print(delta,td,dust_absr,dust_emit,radius,rdust)                
                 if radius < rdust :
                     td += tstep
                 else:
                     td -= tstep
                 
-                if delta < delta_last:
+                if delta < delta_last and tstep > 0.5:
                     tstep = tstep/2.
             
             return td
@@ -454,7 +457,7 @@ class RTModel:
         self.sed_scat  = self.sed_scat#*convertfactor
         self.sed_disc  += self.sed_scat   
 
-    def calculate_dust_emission(self,mode=mode,tolerance=0.01,*args,*kwargs):
+    def calculate_dust_emission(self,*args,**kwargs):
         """
         Function to calculate the continuum emission contribution to the total emission from the disc.
         
@@ -473,7 +476,7 @@ class RTModel:
             qabs = (self.qext[ii,:] - self.qsca[ii,:])
             for ij in range(0,int(self.parameters['nring'])):
                 scalefactor = self.ng[ii]*self.scale[ij]*((self.ag[ii]*um)**2)/(self.parameters['dstar']*pc)**2
-                tdust = RTModel.calculate_dust_temperature(self,self.radii[ij],qabs,mode=mode,tolerance=0.01)
+                tdust = RTModel.calculate_dust_temperature(self,self.radii[ij],qabs,**kwargs)
                 self.sed_ringe[ij,:] = scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
                 self.sed_emit += scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
         #convert model fluxes from flam to fnu (in mJy) 
