@@ -37,21 +37,20 @@ def make_sed(m):
     try:
         ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')
         for ij in range(0,int(m.parameters['nring'])):  
-            ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.1)
+            ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.5)
     except:
         print("No scattered light model.")
 
     ax.loglog(m.sed_wave, (m.sed_emit + m.sed_scat), color='black',linestyle='--')
     ax.loglog(m.sed_wave, m.sed_star, color='black',linestyle='-.')
-    
     ax.loglog(m.sed_wave, m.sed_star + m.sed_emit + m.sed_scat, color='black',linestyle='-')
     ax.set_xlabel(r'$\lambda$ ($\mu$m)')
     ax.set_ylabel(r'Flux density (mJy)')
     ax.set_xlim(m.parameters["lmin"],m.parameters["lmax"])
     if np.max(m.sed_star) > np.max((m.sed_emit + m.sed_scat)):
-        ax.set_ylim(10**(np.log10(np.max((m.sed_emit + m.sed_scat))) - 6),10**(np.log10(np.max(m.sed_star)) + 1))
+        ax.set_ylim(10**(np.log10(np.max((m.sed_emit + m.sed_scat))) - 4),10**(np.log10(np.max(m.sed_star)) + 1))
     else:
-        ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 6),10**(np.log10(np.max((m.sed_emit + m.sed_scat))) + 1))    
+        ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 4),10**(np.log10(np.max((m.sed_emit + m.sed_scat))) + 1))    
     fig.savefig(m.parameters['directory']+m.parameters['prefix']+'_sed.png',dpi=200)
     
     plt.close(fig)
@@ -66,15 +65,17 @@ model = RTModel()
 RTModel.get_parameters(model,'RTModel_Input_File.txt')
 
 model.parameters['directory'] = '/Users/jonty/Desktop/'
-model.parameters['prefix'] = 'test_1e_'
+model.parameters['prefix'] = 'test_2e_'
 model.parameters['stype'] = 'blackbody'
-model.parameters['tstar'] = 10000.0
-model.parameters['rstar'] = 2.2
+model.parameters['tstar'] = 5770.0
+model.parameters['rstar'] = 1.0
 model.parameters['lstar'] = (4*np.pi*5.67e-8*(model.parameters['rstar']*rsol)**2*(model.parameters['tstar'])**4) / lsol
-model.parameters['mdust'] = 1e-4
-model.parameters['rin']   = 20.0
-model.parameters['rout']  = 40.0
-model.parameters['amin']  = 10.0
+model.parameters['mdust'] = 1e-3
+model.parameters['rin']   = 80.0
+model.parameters['rout']  = 120.0
+model.parameters['q'] = -3.6
+model.parameters['amin']  = 1.0
+
 print('here1')
 RTModel.make_star(model)
 print('here2')
@@ -90,6 +91,8 @@ RTModel.calculate_dust_emission(model,mode='full',tolerance=0.05)
 print('here7')
 RTModel.calculate_dust_scatter(model)
 print('here8')
+RTModel.flam_to_fnu(model)
+print('here9')
 make_sed(model)
 
 end = time.time()

@@ -153,8 +153,7 @@ class RTModel:
             nwav = int(self.parameters['nwav'])
             
             wavelengths = np.logspace(np.log10(lmin),np.log10(lmax),num=nwav,base=10.0,endpoint=True) #um
-            #photosphere = RTModel.planck_lam(wavelengths*um,tstar) # W/m2/sr/m
-            photosphere = RTModel.planck_nu(c/(wavelengths*um),tstar) # W/m2/sr/m
+            photosphere = RTModel.planck_lam(wavelengths*um,tstar) # W/m2/sr/m
             photosphere = np.pi * photosphere * ((rstar*rsol)/(dstar*pc))**2 # W/m2/m
             
             lphot = RTModel.calc_luminosity(rstar,tstar)
@@ -162,7 +161,7 @@ class RTModel:
             
             self.parameters['lstar'] = lphot
             
-            photosphere = photosphere*1e26*1e3#*(self.sed_wave*um)**2 /c
+            photosphere = photosphere*1e26*1e3
             
         elif self.parameters['stype'] == 'spectrum':
             lambdas,photosphere = RTModel.read_star(self) #returns wavelength, stellar spectrum in um, mJy
@@ -180,13 +179,14 @@ class RTModel:
                 lambdas = np.append(lambdas,interp_lam_arr)
                 
             photosphere = np.interp(wavelengths,lambdas,photosphere)
+            photosphere = photosphere*c/(self.sed_wave*um)**2
             
-        elif smodel == 'function':
+        elif self.parameters['stype'] == 'function':
             print("starfish model not yet implemented.")
         
-        self.sed_wave = wavelengths 
+        self.sed_wave = wavelengths
         self.sed_star = photosphere
-    
+        
     def read_star(self):
         """
         Function to read in a stellar photosphere model from the SVO database.
@@ -389,8 +389,8 @@ class RTModel:
             print(td)
             return td
         else:
-            td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature
-            tstep = 0.20*td #go for a big step to start with to speed things up if our inital guess is bad
+            td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature at blackbody temperature
+            tstep = 0.25*td #go for a big step to start with to speed things up if our inital guess is bad
             
             delta = 1e30
             
@@ -446,15 +446,14 @@ class RTModel:
         for ii in range(0,int(self.parameters['ngrain'])):  
             alb  = self.qsca[ii,:]/self.qext[ii,:] 
             scalefactor = self.qsca[ii,:]*alb*self.ng[ii]*((self.ag[ii]*um)**2)
+            
             for ij in range(0,int(self.parameters['nring'])):
                 scalefactor = scalefactor*self.scale[ij]/(2.*self.radii[ij]*au)**2
                 self.sed_rings[ij,:] = scalefactor * self.sed_star
                 self.sed_scat += scalefactor * self.sed_star
-        #convert model fluxes from flam to fnu (in mJy) 
-        convertfactor = 1e3*1e26*(self.sed_wave*um)**2 /c
 
-        self.sed_rings = self.sed_rings#*convertfactor
-        self.sed_scat  = self.sed_scat#*convertfactor
+        self.sed_rings = self.sed_rings
+        self.sed_scat  = self.sed_scat
         self.sed_disc  += self.sed_scat   
 
     def calculate_dust_emission(self,*args,**kwargs):
@@ -479,9 +478,24 @@ class RTModel:
                 tdust = RTModel.calculate_dust_temperature(self,self.radii[ij],qabs,**kwargs)
                 self.sed_ringe[ij,:] = scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
                 self.sed_emit += scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
-        #convert model fluxes from flam to fnu (in mJy) 
-        convertfactor = 1e3*1e26*(self.sed_wave*um)**2 /c
 
-        self.sed_ringe = self.sed_ringe*convertfactor
-        self.sed_emit  = self.sed_emit*convertfactor
-        self.sed_disc  += self.sed_emit*convertfactor
+        self.sed_ringe = self.sed_ringe
+        self.sed_emit  = self.sed_emit
+        self.sed_disc  += self.sed_emit
+        
+    def flam_to_fnu(self):
+        """
+        Function to convert calculated stellar and disc emission (in F_lam units) to F_nu (in mJy)
+        
+        Returns
+        -------
+        None.
+
+        """
+        
+        convert_factor = (self.sed_wave*um)**2 / c
+        self.sed_emit *= 1e26*1e3*convert_factor 
+        self.sed_scat *= convert_factor
+        self.sed_star *= convert_factor
+        self.sed_ringe *= 1e26*1e3*convert_factor
+        self.sed_rings *= convert_factor
