@@ -66,27 +66,27 @@ model = RTModel()
 RTModel.get_parameters(model,'RTModel_Input_File.txt')
 
 model.parameters['directory'] = '/Users/jonty/Desktop/'
-model.parameters['prefix'] = 'test_1_'
+model.parameters['prefix'] = 'test_1a_'
 model.parameters['stype'] = 'blackbody'
 model.parameters['tstar'] = 10000.0
 model.parameters['rstar'] = 2.2
 model.parameters['lstar'] = (4*np.pi*5.67e-8*(model.parameters['rstar']*rsol)**2*(model.parameters['tstar'])**4) / lsol
 
-
+print('here1')
 RTModel.make_star(model)
-
+print('here2')
 RTModel.make_dust(model)
-
+print('here3')
 RTModel.make_disc(model)
-
+print('here4')
 RTModel.read_optical_constants(model)
-
+print('here5')
 RTModel.calculate_qabs(model)
-
-RTModel.calculate_dust_emission(model,blackbody=False,tolerance=0.01)
-
+print('here6')
+RTModel.calculate_dust_emission(model,mode='bb',tolerance=0.01)
+print('here7')
 RTModel.calculate_dust_scatter(model)
-
+print('here8')
 make_sed(model)
 
 end = time.time()

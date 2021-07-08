@@ -355,7 +355,7 @@ class RTModel:
         #return scale, radii
     
     #@jit(nopython=True)
-    def calculate_dust_temperature(self,radius,qabs,blackbody=False,tolerance=0.01):
+    def calculate_dust_temperature(self,radius,qabs,mode='bb',tolerance=0.01):
         """
         Function to calculate the temperature of a dust grain at a given distance from the star.
         
@@ -380,8 +380,9 @@ class RTModel:
         rstar = self.parameters["rstar"]
         tstar = self.parameters["tstar"]
                 
-        if blackbody == True:
+        if mode == 'bb':
             td = 278.*(lstar**0.25)*(radius**(-0.5))
+            print(td)
             return td
         else:
             td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature- this is in the mid-range for most debris discs (~30 - 300 K)
@@ -407,7 +408,7 @@ class RTModel:
                 else:
                     td -= tstep
                 
-                if delta < delta_last and tstep > 0.1:
+                if delta < delta_last:
                     tstep = tstep/2.
             
             return td
@@ -453,13 +454,13 @@ class RTModel:
         self.sed_scat  = self.sed_scat#*convertfactor
         self.sed_disc  += self.sed_scat   
 
-    def calculate_dust_emission(self,blackbody=False,tolerance=0.01):
+    def calculate_dust_emission(self,mode=mode,tolerance=0.01,*args,*kwargs):
         """
         Function to calculate the continuum emission contribution to the total emission from the disc.
         
         Parameters
         ----------
-        blackbody : True/False
+        mode : 'bb'/'full'
             Keyword for implementing iterative dust temperature calculation.
         tolerance :
             Maximum allowed difference between computed radius and ring element
@@ -472,7 +473,7 @@ class RTModel:
             qabs = (self.qext[ii,:] - self.qsca[ii,:])
             for ij in range(0,int(self.parameters['nring'])):
                 scalefactor = self.ng[ii]*self.scale[ij]*((self.ag[ii]*um)**2)/(self.parameters['dstar']*pc)**2
-                tdust = RTModel.calculate_dust_temperature(self,self.radii[ij],qabs,blackbody=False,tolerance=0.01)
+                tdust = RTModel.calculate_dust_temperature(self,self.radii[ij],qabs,mode=mode,tolerance=0.01)
                 self.sed_ringe[ij,:] = scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
                 self.sed_emit += scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
         #convert model fluxes from flam to fnu (in mJy) 
