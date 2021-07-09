@@ -30,7 +30,7 @@ um = 1e-6 #for wavelengths in microns
 class RTModel:
     
     def __init__(self):
-        print("Instantiated radiative transfer model object.")
+        #print("Instantiated radiative transfer model object.")
         self.parameters = {}
         self.sed_emit = 0.0
         self.sed_scat = 0.0
@@ -157,7 +157,7 @@ class RTModel:
             photosphere = np.pi * photosphere * ((rstar*rsol)/(dstar*pc))**2 # W/m2/m
             
             lphot = RTModel.calc_luminosity(rstar,tstar)
-            print("Stellar model has a luminosity of: ",lphot," L_sol")
+            #print("Stellar model has a luminosity of: ",lphot," L_sol")
             
             self.parameters['lstar'] = lphot
             
@@ -306,7 +306,7 @@ class RTModel:
     
         """
         if self.parameters["dtype"] == 'gauss':
-            print("Gaussian ring surface density model")
+            #print("Gaussian ring surface density model")
             rpeak = self.parameters["rpeak"]
             rfwhm = self.parameters["rfwhm"]
             nring = int(self.parameters["nring"])
@@ -319,7 +319,7 @@ class RTModel:
             scale = rings / np.sum(rings)
             
         elif self.parameters["dtype"] == 'onepl':
-            print("Single power law surface density model")
+            #print("Single power law surface density model")
             rin  = self.parameters["rin"]
             rout = self.parameters["rout"]
             alpha = self.parameters["alpha_out"]
@@ -330,7 +330,7 @@ class RTModel:
             scale = rings / np.sum(rings)
             
         elif self.parameters["dtype"] == 'twopl':
-            print("Two power law surface density model")
+            #print("Two power law surface density model")
             rpeak = self.parameters["rpeak"]
             alpha = self.parameters["alpha_in"]
             gamma = self.parameters["alpha_out"]
