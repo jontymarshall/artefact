@@ -310,10 +310,10 @@ class RTModel:
             rpeak = self.parameters["rpeak"]
             rfwhm = self.parameters["rfwhm"]
             nring = int(self.parameters["nring"])
-            lower = rpeak - 5.0*(rfwhm/2.355)
-            upper = rpeak + 5.0*(rfwhm/2.355)
+            lower = rpeak - 3.0*(rfwhm/2.355)
+            upper = rpeak + 3.0*(rfwhm/2.355)
             if lower < 0.:
-                lower = 0.0
+                lower = 1.0
             radii = np.linspace(lower,upper,num=nring,endpoint=True)
             rings = np.exp(-0.5*((radii - rpeak)/(rfwhm/2.355))**2)
             scale = rings / np.sum(rings)
