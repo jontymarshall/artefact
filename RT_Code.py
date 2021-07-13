@@ -246,7 +246,7 @@ class RTModel:
         
         grain_sizes = np.logspace(np.log10(amin),np.log10(amax),num=ngrain,base=10.0,endpoint=True)
         
-        grain_numbers = (grain_sizes*um)**q
+        grain_numbers = (grain_sizes)**q
         
         grain_masses  = rho*1e3*(4./3.)*np.pi*((um*grain_sizes)**3) # kg
         disc_masses  = (grain_masses*grain_numbers)
@@ -339,9 +339,9 @@ class RTModel:
             rout = rpeak * (0.05**(1./gamma)) #defined as where density is 5% of peak
             
             radii = np.linspace(0.0,rout,num=nring,endpoint=True)
-            rings = (radii/rpeak)**alpha
+            rings = (radii/radii[0])**4 * (radii/rpeak)**alpha
             outer = np.where(radii > rpeak)
-            rings[outer] = (radii[outer]/rpeak)**gamma
+            rings[outer] = radii[outer]**2 * (radii[outer]/rpeak)**gamma
             scale = rings / np.sum(rings)
         
         elif self.parameters["dtype"] == 'arbit':
@@ -386,7 +386,6 @@ class RTModel:
         
         if mode == 'bb':
             td = 278.*(lstar**0.25)*(radius**(-0.5))
-            print(td)
             return td
         else:
             td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature at blackbody temperature
@@ -394,7 +393,7 @@ class RTModel:
             
             delta = 1e30
             
-            factor = 2.0*((rstar*rsol)/au)
+            factor = 0.5*((rstar*rsol)/au)
             dust_absr = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
             
             while delta > tolerance: 
@@ -411,9 +410,9 @@ class RTModel:
                 else:
                     td -= tstep
                 
-                if delta < delta_last and tstep > 0.5:
+                if delta < delta_last and tstep > 0.1:
                     tstep = tstep/2.
-            
+            #print(td)
             return td
  
     def calculate_qabs(self):
@@ -474,10 +473,10 @@ class RTModel:
         for ii in range(0,int(self.parameters['ngrain'])):  
             qabs = (self.qext[ii,:] - self.qsca[ii,:])
             for ij in range(0,int(self.parameters['nring'])):
-                scalefactor = self.ng[ii]*self.scale[ij]*((self.ag[ii]*um)**2)/(self.parameters['dstar']*pc)**2
+                scalefactor = (2/3)*np.pi**2*qabs*self.ng[ii]*self.scale[ij]*((self.ag[ii]*um)**3)/(self.parameters['dstar']*pc)**2
                 tdust = RTModel.calculate_dust_temperature(self,self.radii[ij],qabs,**kwargs)
-                self.sed_ringe[ij,:] = scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
-                self.sed_emit += scalefactor * qabs * np.pi * RTModel.planck_lam(self.sed_wave*um, tdust)
+                self.sed_ringe[ij,:] = scalefactor * RTModel.planck_lam(self.sed_wave*um, tdust)
+                self.sed_emit += scalefactor * RTModel.planck_lam(self.sed_wave*um, tdust)
 
         self.sed_ringe = self.sed_ringe
         self.sed_emit  = self.sed_emit
@@ -494,8 +493,8 @@ class RTModel:
         """
         
         convert_factor = (self.sed_wave*um)**2 / c
-        self.sed_emit *= 1e26*1e3*convert_factor 
+        self.sed_emit *= 1e26*1e3*convert_factor*1e5
         self.sed_scat *= convert_factor
         self.sed_star *= convert_factor
-        self.sed_ringe *= 1e26*1e3*convert_factor
+        self.sed_ringe *= 1e26*1e3*convert_factor*1e5
         self.sed_rings *= convert_factor
