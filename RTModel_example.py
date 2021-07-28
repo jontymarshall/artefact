@@ -29,15 +29,15 @@ def make_sed(m):
     
     try:
         ax.loglog(m.sed_wave, m.sed_emit, color='red',linestyle=':')
-        for ij in range(0,int(m.parameters['nring'])):
-            ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='orange',alpha=0.1)
+        #for ij in range(0,int(m.parameters['nring'])):
+        #    ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='orange',alpha=0.1)
     except:
         print("No continuum emission model.")
     
     try:
         ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')
-        for ij in range(0,int(m.parameters['nring'])):  
-            ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.5)
+        #for ij in range(0,int(m.parameters['nring'])):  
+        #    ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.5)
     except:
         print("No scattered light model.")
 
@@ -59,21 +59,31 @@ def make_sed(m):
 
 #benchmarking with time
 start = time.time()
-
+print("Starting modelling run...")
 model = RTModel()
-
+print("Created RTModel object...")
 RTModel.get_parameters(model,'RTModel_Input_File.txt')
-
+print("Read in parameters...")
 RTModel.make_star(model)
+print("Created stellar model...")
 RTModel.make_dust(model)
+print("Created dust size distribution model...")
 RTModel.make_disc(model)
+print("Created disc dust distribution model...")
+RTModel.calculate_surface_density(model)
+print("Calculated scaling for disc annuli...")
 RTModel.read_optical_constants(model)
+print("Read in dust optical constants...")
 RTModel.calculate_qabs(model)
+print("Calculated Qabs and Qsca...")
 RTModel.calculate_dust_emission(model,mode='full',tolerance=0.05)
+print("Calculated dust emission...")
 RTModel.calculate_dust_scatter(model)
+print("Caclulated dust scattering...")
 RTModel.flam_to_fnu(model)
+print("Converted from Flam to Fnu...")
 make_sed(model)
-
+print("Generated SED...")
 end = time.time()
 multi_time = end - start
 print("SED calculations took: ",multi_time," seconds.")

@@ -5,7 +5,7 @@ amin        : 4.27 #smallest grain size in um
 amax        : 1000.0 #largest grain size in um
 ngrain      : 101  #number of grain sizes in the model
 q           : -3.42 #exponent of dust size distribution
-mdust       : 0.0072 #Mass of dust
+mdust       : 0.0072 #Mass of dust in M_Earth
 lmin        : 0.3 #shortest wavelength in SED in um
 lmax        : 3000.0 #longest wavelength in SED in um
 nwav        : 201 #number of wavelengths in the model
@@ -19,12 +19,12 @@ model       : G2V_spectrum.txt #photosphere model filename
 #disc properties
 dtype       : onepl #dtype one of 'onepl', 'twopl', 'gauss'
 nring       : 101 #number of annuli in the disc model
-rpeak       : 50. #peak of disc in au (Gaussian model)
-rfwhm       : 10. #fwhm of disc in au (Gaussian model)
+rpeak       : 110. #peak of disc in au (Gaussian model)
+rfwhm       : 60. #fwhm of disc in au (Gaussian model)
 rin         : 60. #inner edge of the disc in au (1PL model)
-rout        : 140. #outer edge of the disc in au (1PL model)
+rout        : 170. #outer edge of the disc in au (1PL model)
 alpha_in    : 10. #exponent of inner slope (2PL model)
-alpha_out   : 0.0 #exponent of outer slope (1/2PL model)
+alpha_out   : 0. #exponent of outer slope (1/2PL model)
 #other properties
-directory   : /Users/jonty/mydata/RT_Code/ #working directory
-prefix      : RTModel_test #prefix for output files
+directory   : /Users/jonty/Desktop/ #working directory
+prefix      : HD104860_RTModel_test #prefix for output files

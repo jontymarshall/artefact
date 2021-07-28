@@ -163,7 +163,7 @@ class RTModel:
             
             photosphere = photosphere*1e3*1e26
             self.sed_wave = wavelengths # um
-            self.sed_star = photosphere # mJy           
+            self.sed_star = photosphere # mJy
                     
         elif self.parameters['stype'] == 'spectrum':
             lambdas,photosphere = RTModel.read_star(self) #returns wavelength, stellar spectrum in um, mJy
@@ -338,13 +338,14 @@ class RTModel:
             rpeak = self.parameters["rpeak"]
             rfwhm = self.parameters["rfwhm"]
             nring = int(self.parameters["nring"])
-            lower = rpeak - 3.0*(rfwhm/2.355)
-            upper = rpeak + 3.0*(rfwhm/2.355)
+
+            lower = rpeak - 5.0*(rfwhm/2.355)
+            upper = rpeak + 5.0*(rfwhm/2.355)
             if lower < 0.:
                 lower = 1.0
             radii = np.linspace(lower,upper,num=nring,endpoint=True)
             rings = np.exp(-0.5*((radii - rpeak)/(rfwhm/2.355))**2)
-            scale = rings / np.sum(rings)
+            scale = rings/np.sum(rings)
             
         elif self.parameters["dtype"] == 'onepl':
             #print("Single power law surface density model")
@@ -359,19 +360,19 @@ class RTModel:
             
         elif self.parameters["dtype"] == 'twopl':
             #print("Two power law surface density model")
+            rin   = self.parameters["rin"]
+            rout  = self.parameters["rout"]
             rpeak = self.parameters["rpeak"]
             alpha = self.parameters["alpha_in"]
             gamma = self.parameters["alpha_out"]
             nring = int(self.parameters["nring"])        
             
-            rout = rpeak * (0.05**(1./gamma)) #defined as where density is 5% of peak
-            
-            radii = np.linspace(0.0,rout,num=nring,endpoint=True)
-            rings = (radii/radii[0])**4 * (radii/rpeak)**alpha
+            radii = np.linspace(rin,rout,num=nring,endpoint=True)
+            rings = (radii/rpeak)**alpha
             outer = np.where(radii > rpeak)
-            rings[outer] = radii[outer]**2 * (radii[outer]/rpeak)**gamma
+            rings[outer] = (radii[outer]/rpeak)**gamma
             scale = rings / np.sum(rings)
-        
+            
         elif self.parameters["dtype"] == 'arbit':
             print("Arbitrary density distribution has not yet been implemented.")
         
@@ -379,10 +380,41 @@ class RTModel:
             print("Model type must be one of 'onepl','twopl', 'gauss', or 'arbit'.")
         
         self.scale = scale
-        self.radii = radii 
+        self.radii = radii
+        
+        dr = (radii[-1] - radii[0]) / nring
+        
+        self.areas = ((radii + 0.5*dr)**2 - (radii - 0.5*dr)**2)*au**2
+        
+        self.scale = self.scale*(self.areas/self.areas[0])
+        self.scale = self.scale/np.sum(self.scale)
         
         #return scale, radii
     
+    def calculate_surface_density(self):
+        """
+        Function to calculate radial surface number density of the disc.
+
+        """
+        
+        self.sigma = np.zeros((int(self.parameters["nring"]),int(self.parameters["ngrain"])))
+
+        if self.parameters["dtype"] == 'gauss':
+            for ii in range(0,int(self.parameters["nring"])):
+                for ij in range(0,int(self.parameters["ngrain"])):
+                    self.sigma[ii,ij] = self.scale[ii]*self.ng[ij]
+
+
+        elif self.parameters["dtype"] == 'onepl':
+            for ii in range(0,int(self.parameters["nring"])):
+                for ij in range(0,int(self.parameters["ngrain"])):
+                    self.sigma[ii,ij] = self.scale[ii]*self.ng[ij]
+        
+        elif self.parameters["dtype"] == 'twopl':
+            for ii in range(0,int(self.parameters["nring"])):
+                for ij in range(0,int(self.parameters["ngrain"])):
+                    self.sigma[ii,ij] = self.scale[ii]*self.ng[ij]
+        
     #@jit(nopython=True)
     def calculate_dust_temperature(self,radius,qabs,mode='bb',tolerance=0.01):
         """
@@ -444,9 +476,36 @@ class RTModel:
                 
                 if delta < delta_last and tstep > 0.1:
                     tstep = tstep/2.
-            
+            #print(dust_absr,dust_emit,td)
             return td
- 
+    
+    def calculate_dust_distance(self,qabs,temp):
+        """
+        
+        Parameters
+        ----------
+        qabs : float array
+            Array of Qabs values for grain size.
+
+        Returns
+        -------
+        distance : float
+            Radial distance for dust grain given stellar emission and dust re-emission.
+
+        """
+        
+        emission = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,temp),self.sed_wave*um) 
+        
+        distance = 0.5*(self.parameters['rstar']*rsol/au)*np.sqrt(self.absorption/emission)
+        
+        return distance
+            
+    def rdiff(self,qabs,temp,radius):
+        
+        delta = radius - RTModel.calculate_dust_distance(self,qabs,temp)
+        
+        return delta
+            
     def calculate_qabs(self):
         """
         Function to calculate the qabs,qsca values for the grains in the model.
@@ -476,17 +535,14 @@ class RTModel:
         
         self.sed_rings = np.zeros((int(self.parameters['nring']),int(self.parameters['nwav']))) 
         
-        for ii in range(0,int(self.parameters['ngrain'])):  
-            alb  = self.qsca[ii,:]/self.qext[ii,:] 
-            scalefactor = self.qsca[ii,:]*alb*self.ng[ii]*np.pi*((self.ag[ii]*um)**2)
-            
-            for ij in range(0,int(self.parameters['nring'])):
-                scalefactor = scalefactor*self.scale[ij]/(2.*self.radii[ij]*au)**2
-                self.sed_rings[ij,:] = scalefactor * self.sed_star
-                self.sed_scat += scalefactor * self.sed_star
+        for ii in range(0,int(self.parameters['nring'])):  
+            for ij in range(0,int(self.parameters['ngrain'])):
+                alb  = self.qsca[ij,:]/self.qext[ij,:] 
+                scalefactor = self.qsca[ij,:]*alb*self.sigma[ii,ij]*np.pi*((self.ag[ij]*um)**2) / (2*self.radii[ii]*au)**2 
+                
+                self.sed_rings[ii,:] = scalefactor * self.sed_star
+                self.sed_scat += self.sed_rings[ii,:]
 
-        self.sed_rings = self.sed_rings
-        self.sed_scat  = self.sed_scat
         self.sed_disc  += self.sed_scat   
 
     def calculate_dust_emission(self,*args,**kwargs):
@@ -504,56 +560,26 @@ class RTModel:
 
         #Calculate dust temperatures
         self.tdust = np.zeros((int(self.parameters["nring"]),int(self.parameters["ngrain"])))
-
-        for ii in range(0,int(self.parameters['nring'])):
-            for ij in range(0,int(self.parameters['ngrain'])):
-                self.tdust[ii,ij] = RTModel.calculate_dust_temperature(self,self.radii[ii],self.qabs[ij,:],**kwargs)
-        
         self.sed_ringe = np.zeros((int(self.parameters["nring"]),int(self.parameters["ngrain"]),int(self.parameters["nwav"])))
         
-        self.dlam = copy.copy(self.sed_wave*um)*((np.log10(self.sed_wave[-1]) - np.log10(self.sed_wave[0]))/self.parameters["nwav"])
-        self.da   = copy.copy(self.ag*um)*((np.log10(self.ag[-1]) - np.log10(self.ag[0])/self.parameters["ngrain"]))
-        
         #Calculate emission
-        for ii in range(1,int(self.parameters['nring'])):
+        for ii in range(0,int(self.parameters['nring'])):
             for ij in range(0,int(self.parameters['ngrain'])):
-
-                dT = np.abs((self.tdust[ii-1,ij] - self.tdust[ii,ij]))
+                scalefactor = 1e26*1e3*(2.*np.pi**2/((self.parameters['dstar']*pc)**2))*self.sigma[ii,ij]*self.radii[ii]**2*(self.ag[ij]*um)**3
                 
-                scalefactor = (2*np.pi**2/((self.parameters['dstar']*pc)**2))*self.ng[ij]*self.scale[ii]*(1/3)*(self.ag[ij]*um)**3
- 
-                denom = RTModel.drdt_denom(self,ii,ij)
-                numer = RTModel.drdt_numer(self,ii,ij)
+                self.tdust[ii,ij] = RTModel.calculate_dust_temperature(self,self.radii[ii],self.qabs[ij,:],mode='full',tolerance=0.01)
                 
-                self.sed_ringe[ii,ij,:] = denom*numer*scalefactor*self.qabs[ij,:]*RTModel.planck_lam(self.sed_wave*um,self.tdust[ii,ij])
-                self.sed_ringe[ii,ij,:] *= dT*self.dlam*self.da[ij]/(self.sed_wave*um)
+                self.sed_ringe[ii,ij,:] = scalefactor*self.qabs[ij,:]*RTModel.planck_lam(self.sed_wave*um,self.tdust[ii,ij])
                 
         #self.sed_ringe = np.zeros((int(self.parameters['nring']),int(self.parameters['ngrain']),int(self.parameters['nwav'])))
         #for ii in range(0,int(self.parameters['nring'])):
         #    for ij in range(0,int(self.parameters['ngrain'])):  
         #        qabs = (self.qext[ij,:] - self.qsca[ij,:])
-                #scalefactor = (2*np.pi**2/((self.parameters['dstar']*pc)**2))*qabs*self.ng[ii]*self.scale[ij]*(((1/3)*self.ag[ii]*um)**3)
         #        scalefactor = (2*np.pi**2/((self.parameters['dstar']*pc)**2))*qabs*self.ng[ij]*self.scale[ii]*(self.ag[ij]*um)**2                
         #        tdust = RTModel.calculate_dust_temperature(self,self.radii[ii],qabs,**kwargs)
         #        self.sed_ringe[ii,ij,:] = scalefactor * RTModel.planck_lam(self.sed_wave*um, tdust)
                 self.sed_emit += self.sed_ringe[ii,ij,:]
         self.sed_disc += self.sed_emit
-    
-    def drdt_denom(self,r,s):
-        
-        denom = 0.5*self.radii[r]*au/np.trapz(self.qabs[s,:]*RTModel.planck_lam(self.sed_wave*um,self.tdust[r,s]),self.sed_wave*um)
-        
-        return denom
-        
-    def drdt_numer(self,r,s):
-        
-        numer  = ((h*c)/((self.sed_wave*um)*k*self.tdust[r,s]))
-        numer *= self.qabs[s,:]*RTModel.planck_lam(self.sed_wave*um,self.tdust[r,s])
-        numer /= (1. - np.e**(-1*(h*c)/(self.sed_wave*um*k*self.tdust[r,s])))
-        
-        numer = np.trapz(numer,self.sed_wave*um)
-        
-        return numer
         
     def flam_to_fnu(self):
         """
@@ -569,8 +595,8 @@ class RTModel:
         
         self.sed_star *= convert_factor
         
-        self.sed_emit *= 1e26*convert_factor
-        self.sed_ringe *= 1e26*convert_factor
+        self.sed_emit *= convert_factor
+        self.sed_ringe *= convert_factor
         
         self.sed_scat *= convert_factor
         self.sed_rings *= convert_factor
