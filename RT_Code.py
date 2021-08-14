@@ -230,12 +230,19 @@ class RTModel:
         return model_waves, model_spect
 
     #Scale photosphere model to observations after creation
-    def scale_star(self,lmax=10.):
+    def scale_star(self,lrange=[0.3,5.0]):
         
+        try:
+            lmin = lrange[0]
+            lmax = lrange[1]  
+        except:
+            lmin = np.min(self.obs_wave)
+            lmax = lrange
+
         #Observations and stellar photosphere model
-        fobs = self.obs_flux[np.where(self.obs_wave <= lmax)]
-        lobs = self.obs_wave[np.where(self.obs_wave <= lmax)]
-        uobs = self.obs_uncs[np.where(self.obs_wave <= lmax)]
+        fobs = self.obs_flux[np.where((self.obs_wave >= lmin)&(self.obs_wave <= lmax))]
+        lobs = self.obs_wave[np.where((self.obs_wave >= lmin)&(self.obs_wave <= lmax))]
+        uobs = self.obs_uncs[np.where((self.obs_wave >= lmin)&(self.obs_wave <= lmax))]
         
         smod = copy.copy(self.sed_star)*(self.sed_wave*um)**2 /c 
         lmod = self.sed_wave
