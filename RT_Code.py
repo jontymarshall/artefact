@@ -193,6 +193,15 @@ class RTModel:
         elif self.parameters['stype'] == 'json':
             lambdas,photosphere = RTModel.read_json(self) #returns wavelength, stellar spectrum in um, mJy
 
+            wavelengths = np.logspace(np.log10(lmin),np.log10(lmax),num=nwav,base=10.0,endpoint=True)
+            
+            if np.max(wavelengths) > np.max(lambdas):
+                interp_lam_arr = np.logspace(np.log10(lambdas[-1]),np.log10(1.1*wavelengths[-1]),num=nwav,base=10.0,endpoint=True)
+                interp_pht_arr = photosphere[-1]*(lambdas[-1]/interp_lam_arr)**4
+                lambdas = np.append(lambdas,interp_lam_arr)
+                photosphere = np.append(photosphere,interp_pht_arr)
+
+            photosphere = np.interp(wavelengths,lambdas,photosphere)                
             photosphere = photosphere*1e6*1e26*((rstar*rsol)/(dstar*pc))**2 #convert fnu -> flam
             
             self.sed_wave = wavelengths #um
