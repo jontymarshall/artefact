@@ -144,8 +144,9 @@ class RTModel:
         
         if self.parameters['stype'] != 'blackbody' and \
            self.parameters['stype'] != 'spectrum' and \
+           self.parameters['stype'] != 'json' and \
            self.parameters['stype'] != 'starfish':
-            print("Input 'stype' must be one of 'blackbody', 'spectrum', or 'starfish'.")
+            print("Input 'stype' must be one of 'blackbody', 'spectrum', 'json', or 'starfish'.")
     
         if self.parameters['stype'] == 'blackbody':
             lstar = self.parameters['lstar']
@@ -188,10 +189,29 @@ class RTModel:
             
             self.sed_wave = wavelengths #um
             self.sed_star = photosphere #flam
+        
+        elif self.parameters['stype'] == 'json':
+            lambdas,photosphere = RTModel.read_json(self) #returns wavelength, stellar spectrum in um, mJy
+
+            photosphere = photosphere*1e3*1e26*((rstar*rsol)/(dstar*pc))**2 #convert fnu -> flam
             
+            self.sed_wave = wavelengths #um
+            self.sed_star = photosphere #flam
+
         elif self.parameters['stype'] == 'starfish':
             print("starfish model not yet implemented.")
-                
+    
+    def read_json(self):
+
+        import json
+        spectrum_file = self.parameters['model']
+        data = json.load(open(spectrum_file))
+        
+        model_waves =  data['star_spec']['wavelength'].data #um
+        model_spect =  data['star_spec']['fnujy'].data #Jy         
+
+        return model_waves,model_spect
+
     def read_star(self):
         """
         Function to read in a stellar photosphere model from the SVO database.
