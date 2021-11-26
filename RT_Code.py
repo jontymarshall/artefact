@@ -193,7 +193,7 @@ class RTModel:
         elif self.parameters['stype'] == 'json':
             lambdas,photosphere = RTModel.read_json(self) #returns wavelength, stellar spectrum in um, mJy
 
-            photosphere = photosphere*1e3*1e26*((rstar*rsol)/(dstar*pc))**2 #convert fnu -> flam
+            photosphere = photosphere*1e6*1e26*((rstar*rsol)/(dstar*pc))**2 #convert fnu -> flam
             
             self.sed_wave = wavelengths #um
             self.sed_star = photosphere #flam
