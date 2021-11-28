@@ -192,7 +192,14 @@ class RTModel:
         
         elif self.parameters['stype'] == 'json':
             lambdas,photosphere = RTModel.read_json(self) #returns wavelength, stellar spectrum in um, mJy
-
+            lstar = self.parameters['lstar']
+            rstar = self.parameters['rstar']
+            dstar = self.parameters['dstar']
+            
+            lmin = self.parameters['lmin']
+            lmax = self.parameters['lmax']
+            nwav = int(self.parameters['nwav'])
+            
             wavelengths = np.logspace(np.log10(lmin),np.log10(lmax),num=nwav,base=10.0,endpoint=True)
             
             if np.max(wavelengths) > np.max(lambdas):
@@ -211,13 +218,32 @@ class RTModel:
             print("starfish model not yet implemented.")
     
     def read_json(self):
-
+        """
+        Function to read in a stellar photosphere model from a json file.
+        
+        Stellar photosphere model is assumed to have wavelengths in microns,
+        and flux density in mJy.
+        
+        Parameters
+        ----------
+        star_params : Dictionary
+             Stellar parameters.
+    
+        Returns
+        -------
+        model_waves : float array
+            Wavelengths in microns in ascending order.
+        model_spect : float array
+            Photospheric flux density in mJy in ascending order.
+    
+        
+        """
         import json
         spectrum_file = self.parameters['model']
         data = json.load(open(spectrum_file))
         
-        model_waves =  data['star_spec']['wavelength'].data #um
-        model_spect =  data['star_spec']['fnujy'].data #Jy         
+        model_waves =  np.asarray(data['star_spec']['wavelength']) #um
+        model_spect =  np.asarray(data['star_spec']['fnujy'])*c/(model_waves*um)**2 #W/m2/m    (from mJy)    
 
         return model_waves,model_spect
 
@@ -238,9 +264,9 @@ class RTModel:
     
         Returns
         -------
-        wav_um : float array
+        model_waves : float array
             Wavelengths in microns in ascending order.
-        flx_mjy : float array
+        model_spect : float array
             Photospheric flux density in mJy in ascending order.
     
         
@@ -493,7 +519,7 @@ class RTModel:
             factor = 0.5*((rstar*rsol)/au)
             if self.parameters["stype"] == 'blackbody':
                 dust_absr= np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
-            elif self.parameters["stype"] == 'spectrum':
+            elif self.parameters["stype"] == 'spectrum' or self.parameters['stype'] == 'json':
                 dust_absr = np.trapz(qabs*self.sed_star*1e-26*1e-3*((dstar*pc)/(rstar*rsol))**2,self.sed_wave*um)
             
             while delta > tolerance: 

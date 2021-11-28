@@ -78,9 +78,10 @@ model.obs_uncs = unc
 model.obs_wave = wav
 
 RTModel.make_star(model)
-RTModel.scale_star(model,lmax=10.)
+RTModel.scale_star(model,lrange=[0.3,5.0])
 RTModel.make_dust(model)
 RTModel.make_disc(model)
+RTModel.calculate_surface_density(model)
 RTModel.read_optical_constants(model)
 RTModel.calculate_qabs(model)
 RTModel.calculate_dust_emission(model,mode='full',tolerance=0.01)

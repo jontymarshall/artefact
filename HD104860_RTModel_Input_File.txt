@@ -10,12 +10,12 @@ lmin        : 0.3 #shortest wavelength in SED in um
 lmax        : 3000.0 #longest wavelength in SED in um
 nwav        : 201 #number of wavelengths in the model
 #star properties
-stype       : spectrum #stype either 'spectrum' or 'blackbody'
+stype       : json #stype either 'spectrum' or 'blackbody' or 'json'
 lstar       : 1.318 #lstar in L_Sol
 rstar       : 0.94 #rstar in R_Sol
 tstar       : 5950.0 #tstar in K
 dstar       : 48.0 #dstar in pc
-model       : G2V_spectrum.txt #photosphere model filename
+model       : hd104860.json #photosphere model filename
 #disc properties
 dtype       : onepl #dtype one of 'onepl', 'twopl', 'gauss'
 nring       : 101 #number of annuli in the disc model
