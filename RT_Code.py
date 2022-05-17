@@ -11,6 +11,8 @@ import miepython as mpy
 from numba import jit
 import copy
 from astropy.io import ascii
+from scipy import interpolate
+from scipy.optimize import curve_fit
 
 #constants
 h = 6.626e-34
@@ -160,14 +162,14 @@ class RTModel:
             
             wavelengths = np.logspace(np.log10(lmin),np.log10(lmax),num=nwav,base=10.0,endpoint=True) #um
             photosphere = RTModel.planck_lam(wavelengths*um,tstar) # W/m2/sr/m
-            photosphere = np.pi * photosphere * ((rstar*rsol)/(dstar*pc))**2 # W/m2/m
-            
-            photosphere = photosphere*1e3*1e26
+            photosphere = np.pi * 1e26 * photosphere * ((rstar*rsol)/(dstar*pc))**2 # W/m2/m
+
             self.sed_wave = wavelengths # um
             self.sed_star = photosphere # mJy
                     
         elif self.parameters['stype'] == 'spectrum':
             lambdas,photosphere = RTModel.read_star(self) #returns wavelength, stellar spectrum in um, mJy
+            
             lstar = self.parameters['lstar']
             rstar = self.parameters['rstar']
             dstar = self.parameters['dstar']
@@ -185,13 +187,14 @@ class RTModel:
                 photosphere = np.append(photosphere,interp_pht_arr)
             
             photosphere = np.interp(wavelengths,lambdas,photosphere)
-            photosphere = photosphere*1e3*1e26*((rstar*rsol)/(dstar*pc))**2
+            photosphere = np.pi * photosphere*1e26*((rstar*rsol)/(dstar*pc))**2
             
             self.sed_wave = wavelengths #um
             self.sed_star = photosphere #flam
         
         elif self.parameters['stype'] == 'json':
             lambdas,photosphere = RTModel.read_json(self) #returns wavelength, stellar spectrum in um, mJy
+            
             lstar = self.parameters['lstar']
             rstar = self.parameters['rstar']
             dstar = self.parameters['dstar']
@@ -209,7 +212,7 @@ class RTModel:
                 photosphere = np.append(photosphere,interp_pht_arr)
 
             photosphere = np.interp(wavelengths,lambdas,photosphere)                
-            photosphere = photosphere*1e6*1e26*((rstar*rsol)/(dstar*pc))**2 #convert fnu -> flam
+            photosphere = np.pi * photosphere*1e26*((rstar*rsol)/(dstar*pc))**2 #convert fnu -> flam
             
             self.sed_wave = wavelengths #um
             self.sed_star = photosphere #flam
@@ -243,7 +246,7 @@ class RTModel:
         data = json.load(open(spectrum_file))
         
         model_waves =  np.asarray(data['star_spec']['wavelength']) #um
-        model_spect =  np.asarray(data['star_spec']['fnujy'])*c/(model_waves*um)**2 #W/m2/m    (from mJy)    
+        model_spect =  np.asarray(data['star_spec']['fnujy'])/(model_waves*um)**2 #erg/cm2/s/A    (from Jy)
 
         return model_waves,model_spect
 
@@ -267,7 +270,7 @@ class RTModel:
         model_waves : float array
             Wavelengths in microns in ascending order.
         model_spect : float array
-            Photospheric flux density in mJy in ascending order.
+            Photospheric flux density in W/m2/m in ascending order.
     
         
         """
@@ -279,43 +282,36 @@ class RTModel:
         model_spect =  data['Flux'].data #Ergs/cm**2/s/A 
 
         model_waves = model_waves*1e-4 #um        
-        model_spect = 1e-7*1e4*1e10*model_spect #W/m2/m
+        model_spect *= 1e-7*1e4*1e10 #W/m2/m
 
         
         return model_waves, model_spect
 
     #Scale photosphere model to observations after creation
-    def scale_star(self,lrange=[0.3,5.0]):
+    def scale_star(self):
         
-        try:
-            lmin = lrange[0]
-            lmax = lrange[1]  
-        except:
-            lmin = np.min(self.obs_wave)
-            lmax = lrange
-
         #Observations and stellar photosphere model
-        fobs = self.obs_flux[np.where((self.obs_wave >= lmin)&(self.obs_wave <= lmax))]
-        lobs = self.obs_wave[np.where((self.obs_wave >= lmin)&(self.obs_wave <= lmax))]
-        uobs = self.obs_uncs[np.where((self.obs_wave >= lmin)&(self.obs_wave <= lmax))]
-        
-        smod = copy.copy(self.sed_star)*(self.sed_wave*um)**2 /c 
-        lmod = self.sed_wave
-        
+        fobs = np.asarray(self.obs_flux)
+        lobs = np.asarray(self.obs_wave)
+        uobs = np.asarray(self.obs_uncs)
+
+        ind = np.where((lobs >= 0.44)&(lobs < 15.))
+
+        fobs = fobs[ind]
+        lobs = lobs[ind]
+        uobs = uobs[ind]
+
         #interpolate model at observed wavelengths
-        from scipy import interpolate
-        
-        f = interpolate.interp1d(lmod,smod)
+
+        f = interpolate.interp1d(self.sed_wave,self.sed_star)
         sint = f(lobs)
-        
-        from scipy.optimize import curve_fit
         
         def func(x,a):
             return x*a
         
         popt, pcov = curve_fit(func, sint, fobs,sigma=uobs)
-        
-        self.sed_star = popt[0]*self.sed_star
+
+        self.sed_star *= popt[0]
         
     #set up power law size distribution for the dust model
     def make_dust(self): 
@@ -401,8 +397,8 @@ class RTModel:
             rfwhm = self.parameters["rfwhm"]
             nring = int(self.parameters["nring"])
 
-            lower = rpeak - 5.0*(rfwhm/2.355)
-            upper = rpeak + 5.0*(rfwhm/2.355)
+            lower = rpeak - 3.0*(rfwhm/2.355)
+            upper = rpeak + 3.0*(rfwhm/2.355)
             if lower < 0.:
                 lower = 1.0
             radii = np.linspace(lower,upper,num=nring,endpoint=True)
@@ -444,9 +440,9 @@ class RTModel:
         self.scale = scale
         self.radii = radii
         
-        dr = (radii[-1] - radii[0]) / nring
+        self.dr = (radii[-1] - radii[0]) / nring
         
-        self.areas = ((radii + 0.5*dr)**2 - (radii - 0.5*dr)**2)*au**2
+        self.areas = ((self.radii + 0.5*self.dr)**2 - (self.radii - 0.5*self.dr)**2)*au**2
         
         self.scale = self.scale*(self.areas/self.areas[0])
         self.scale = self.scale/np.sum(self.scale)
@@ -478,7 +474,7 @@ class RTModel:
                     self.sigma[ii,ij] = self.scale[ii]*self.ng[ij]
         
     #@jit(nopython=True)
-    def calculate_dust_temperature(self,radius,qabs,mode='bb',tolerance=0.01):
+    def calculate_dust_temperature(self,radius,qabs,mode='bb',tolerance=1e-3):
         """
         Function to calculate the temperature of a dust grain at a given distance from the star.
         
@@ -509,64 +505,47 @@ class RTModel:
         
         if mode == 'bb':
             td = 278.*(lstar**0.25)*(radius**(-0.5))
-            return td
+
         else:
-            td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature at blackbody temperature
-            tstep = 0.25*td #go for a big step to start with to speed things up if our inital guess is bad
-            
-            delta = 1e30
+            # td = 278.*(lstar**0.25)*(radius**(-0.5)) #inital guess temperature at blackbody temperature
             
             factor = 0.5*((rstar*rsol)/au)
+            dust_absr1 = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
             if self.parameters["stype"] == 'blackbody':
-                dust_absr= np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
+                dust_absr = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tstar),self.sed_wave*um)
             elif self.parameters["stype"] == 'spectrum' or self.parameters['stype'] == 'json':
-                dust_absr = np.trapz(qabs*self.sed_star*1e-26*1e-3*((dstar*pc)/(rstar*rsol))**2,self.sed_wave*um)
-            
-            while delta > tolerance: 
+                dust_absr = np.trapz(qabs*1e-26*self.sed_star*((dstar*pc)/(rstar*rsol))**2,self.sed_wave*um)
+
+            tlo = 2.73
+            thi = tstar
+            tmi = 0.5*(thi + tlo)
+
+            tguess = tmi 
+
+            #print(thi,tlo,tguess,tprev,delta,np.min(self.radii),np.max(self.radii),self.dr)
+            delta = 1e30
+            while abs(delta) > tolerance: 
                 
-                dust_emit = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,td),self.sed_wave*um)
-                
+                dust_emit = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,tguess),self.sed_wave*um)
+
                 rdust = factor*(dust_absr/dust_emit)**0.5
-    
-                delta_last = delta
-                delta = abs(radius - rdust) / radius
                 
-                if radius < rdust :
-                    td += tstep
-                else:
-                    td -= tstep
-                
-                if delta < delta_last and tstep > 0.1:
-                    tstep = tstep/2.
-            #print(dust_absr,dust_emit,td)
+                delta = (radius - rdust) / radius
+
+                if delta < 0.0 :
+                    thi = thi
+                    tlo = tguess
+                elif delta >= 0.0 : 
+                    thi = tguess
+                    tlo = tlo
+
+                tguess = 0.5*(thi + tlo)
+
+                if abs(delta) < tolerance: 
+                    td = tguess
+
+                #print(thi,tlo,tguess,delta,tolerance)
             return td
-    
-    def calculate_dust_distance(self,qabs,temp):
-        """
-        
-        Parameters
-        ----------
-        qabs : float array
-            Array of Qabs values for grain size.
-
-        Returns
-        -------
-        distance : float
-            Radial distance for dust grain given stellar emission and dust re-emission.
-
-        """
-        
-        emission = np.trapz(qabs*RTModel.planck_lam(self.sed_wave*um,temp),self.sed_wave*um) 
-        
-        distance = 0.5*(self.parameters['rstar']*rsol/au)*np.sqrt(self.absorption/emission)
-        
-        return distance
-            
-    def rdiff(self,qabs,temp,radius):
-        
-        delta = radius - RTModel.calculate_dust_distance(self,qabs,temp)
-        
-        return delta
             
     def calculate_qabs(self):
         """
@@ -627,9 +606,9 @@ class RTModel:
         #Calculate emission
         for ii in range(0,int(self.parameters['nring'])):
             for ij in range(0,int(self.parameters['ngrain'])):
-                scalefactor = 1e26*1e3*(2.*np.pi**2/((self.parameters['dstar']*pc)**2))*self.sigma[ii,ij]*self.radii[ii]**2*(self.ag[ij]*um)**3
+                scalefactor = 1e3* (2.*np.pi**2/((self.parameters['dstar']*pc)**2))*self.sigma[ii,ij]*(self.radii[ii]*au)**2*(self.ag[ij]*um)**3
                 
-                self.tdust[ii,ij] = RTModel.calculate_dust_temperature(self,self.radii[ii],self.qabs[ij,:],mode='full',tolerance=0.01)
+                self.tdust[ii,ij] = RTModel.calculate_dust_temperature(self,self.radii[ii],self.qabs[ij,:],mode='full',tolerance=1e-3)
                 
                 self.sed_ringe[ii,ij,:] = scalefactor*self.qabs[ij,:]*RTModel.planck_lam(self.sed_wave*um,self.tdust[ii,ij])
                 
@@ -653,10 +632,10 @@ class RTModel:
 
         """
         
-        convert_factor = (self.sed_wave*um)**2 / c
-        
+        convert_factor = 1e3 * (self.sed_wave*um)**2 / c
+
         self.sed_star *= convert_factor
-        
+
         self.sed_emit *= convert_factor
         self.sed_ringe *= convert_factor
         
