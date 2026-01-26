@@ -4,7 +4,9 @@ This is a small piece of code to calculate the continuum emission from a dust di
 
 The repository contains the artefact code along with a worked example including the necessary data files. The code can take input stellar models from a variety of sources including direct user defined input, a blackbody assumption, VOSA stellar models (https://svo2.cab.inta-csic.es/theory/newov2/), and from SDB JSON files (https://sdb.drgmk.com). Disc architecture is likewise flexibly defined with 1- and 2- power law models, a Gaussian belt, or user defined distribution. Dust grain scattering and emission is calculated from optical constants using Mie theory with a power law size distribution of dust grains in conjunction with the belt architecture.
 
-If you use artefact in your research, please cite Marshall et al. (2023) (https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.5940M). This code was written by Jonathan Marshall in collaboration with Robin Young and Shane Hengst. Artefact makes use of several Python packages for its calculations, most notably AstroPy, Numpy, SciPy, and MiePython. In the examples given here I have used 
+If you use artefact in your research, please cite Marshall et al. (2023) (https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.5940M). This code was written by Jonathan Marshall in collaboration with Robin Young and Shane Hengst. Artefact makes use of several Python packages for its calculations, most notably AstroPy, Numpy, SciPy, and MiePython. In the examples given here I have used a version of PySED (https://github.com/jontymarshall/pysed) to obtain stellar data and photometry for HD 104860 from Simbad and Vizier. I also used the Python packages Emcee and Corner to explore parameter space for modelling and return maximum amplitude probability results.
+
+The structure of the repository is laid out as follows:
 
 ```
 .

@@ -61,10 +61,12 @@ def make_sed(m):
 
     m.figure = fig
 
-#Photometry taken from Steele et al. (2016)
-wav = np.asarray([1.24,1.65,2.16,3.35,3.6,4.5,4.6,8.,11.6,13.,22.1,24.,33.,70.,100.,160.,350.,450.,850.,1200.,1300.])
-flx = np.asarray([2940.,2450.,1670.,806.,725.,455.,442.,163.,74.,57.,23.,20.,18.,183.,277.,243.,50.,47.,6.8,4.4,5.5])
-unc = np.asarray([50,40,30,32,16,11,9,4,1,4,1,1,2,15,4,5,14,18,1,1,2])
+#Photometry obtained using PySED to search selected Vizier catalogues
+phot_data = ascii.read('HD104860_photometry.txt',delimiter=',',comment='#',guess=False)
+
+wav = phot_data['wave'].data
+flx = phot_data['flux'].data
+unc = phot_data['uncs'].data
 
 #benchmarking with time
 start = time.time()
