@@ -14,19 +14,18 @@ from astropy.io import ascii
 from scipy import interpolate
 from scipy.optimize import curve_fit
 
-#constants
-h = 6.626e-34
-c = 299792458.0 # m/s
-k = 1.38e-23
-sb = 5.67e-8 #
-au     = 1.495978707e11 # m 
-pc     = 3.0857e16 # m
-lsol   = 3.828e26 # W
-rsol   = 6.96342e8 # m
-MEarth = 5.97237e24 # kg
+import astropy.constants as const
+h      = const.h.value #6.626e-34 J s
+c      = const.c.value #299792458.0 m / s
+k      = const.k_B.value #1.38e-23 J / K
+sb     = const.sigma_sb.value #5.67e-8 W / K^4 / m^2
+au     = const.au.value #1.495978707e11 m 
+pc     = const.pc.value #3.0857e16 m
+lsol   = const.L_sun.value #3.828e26 W
+rsol   = const.R_sun.value #6.96342e8 m
+MEarth = const.M_earth.value #5.97237e24 kg
 
 um = 1e-6 #for wavelengths in microns
-
 
 class RTModel:
     
