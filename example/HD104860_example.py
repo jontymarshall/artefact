@@ -4,19 +4,6 @@ import time
 import copy
 from artefact import RTModel
 
-import astropy.constants as const
-h      = const.h.value #6.626e-34 J s
-c      = const.c.value #299792458.0 m / s
-k      = const.k_B.value #1.38e-23 J / K
-sb     = const.sigma_sb.value #5.67e-8 W / K^4 / m^2
-au     = const.au.value #1.495978707e11 m 
-pc     = const.pc.value #3.0857e16 m
-lsol   = const.L_sun.value #3.828e26 W
-rsol   = const.R_sun.value #6.96342e8 m
-MEarth = const.M_earth.value #5.97237e24 kg
-
-um = 1e-6 #for wavelengths in microns
-
 #plot the sed
 def make_sed(m): 
     fig = plt.figure()
@@ -61,8 +48,12 @@ def make_sed(m):
 
     m.figure = fig
 
+#Target details
+target = "HD104860"
+
 #Photometry obtained using PySED to search selected Vizier catalogues
-phot_data = ascii.read('HD104860_photometry.txt',delimiter=',',comment='#',guess=False)
+phot_data = np.loadtxt(target+'_photometry.txt',delimiter=',',
+                        comments="#", usecols=(0, 1, 2), unpack=True)
 
 wav = phot_data['wave'].data
 flx = phot_data['flux'].data
@@ -73,23 +64,29 @@ start = time.time()
 
 model = RTModel()
 
-RTModel.get_parameters(model,'HD104860_RTModel_Input_File.txt')
+RTModel.get_parameters(model,target+'_RTModel_Input_File.txt')
 
 model.obs_flux = flx
 model.obs_uncs = unc
 model.obs_wave = wav
 
 RTModel.make_star(model)
-RTModel.scale_star(model,lrange=[0.3,5.0])
+RTModel.scale_star(model,lmin=0.45,lmax=5.0)
 RTModel.make_dust(model)
 RTModel.make_disc(model)
 RTModel.calculate_surface_density(model)
 RTModel.read_optical_constants(model)
 RTModel.calculate_qabs(model)
-RTModel.calculate_dust_emission(model,mode='full',tolerance=0.01)
+RTModel.calculate_dust_emission(model,mode="full",tolerance=1e-3)
 RTModel.calculate_dust_scatter(model)
 RTModel.flam_to_fnu(model)
+print("Ran artefact model for target: ",target)
+
 make_sed(model)
+print("Generated SED...")
+end = time.time()
+duration = end - start
+print("SED calculations took: ",duration," seconds.")
 
 end = time.time()
 multi_time = end - start

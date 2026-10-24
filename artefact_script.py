@@ -9,50 +9,36 @@ from scipy import integrate
 
 from artefact import RTModel
 
-#constants
-import astropy.constants as const
-h      = const.h.value #6.626e-34 J s
-c      = const.c.value #299792458.0 m / s
-k      = const.k_B.value #1.38e-23 J / K
-sb     = const.sigma_sb.value #5.67e-8 W / K^4 / m^2
-au     = const.au.value #1.495978707e11 m 
-pc     = const.pc.value #3.0857e16 m
-lsol   = const.L_sun.value #3.828e26 W
-rsol   = const.R_sun.value #6.96342e8 m
-MEarth = const.M_earth.value #5.97237e24 kg
-
-um = 1e-6 #for wavelengths in microns
-
 #plot the sed
 def make_sed(m): 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
     
     try:
-        ax.loglog(m.sed_wave, m.sed_emit, color='red',linestyle=':')
-        #for ij in range(0,int(m.parameters['nring'])):
-        #    ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle='-',color='orange',alpha=0.1)
+        ax.loglog(m.sed_wave, m.sed_emit, color="red",linestyle=":")
+        #for ij in range(0,int(m.parameters["nring"])):
+        #    ax.loglog(m.sed_wave,m.sed_ringe[ij,:],linestyle="-",color="orange",alpha=0.1)
     except:
         print("No continuum emission model.")
     
     try:
-        ax.loglog(m.sed_wave, m.sed_scat, color='blue',linestyle=':')
-        #for ij in range(0,int(m.parameters['nring'])):  
-        #    ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle='-',color='dodgerblue',alpha=0.5)
+        ax.loglog(m.sed_wave, m.sed_scat, color="blue",linestyle=":")
+        #for ij in range(0,int(m.parameters["nring"])):  
+        #    ax.loglog(m.sed_wave,m.sed_rings[ij,:],linestyle="-",color="dodgerblue",alpha=0.5)
     except:
         print("No scattered light model.")
 
-    ax.loglog(m.sed_wave, (m.sed_emit + m.sed_scat), color='black',linestyle='--')
-    ax.loglog(m.sed_wave, m.sed_star, color='black',linestyle='-.')
-    ax.loglog(m.sed_wave, m.sed_star + m.sed_emit + m.sed_scat, color='black',linestyle='-')
-    ax.set_xlabel(r'$\lambda$ ($\mu$m)')
-    ax.set_ylabel(r'Flux density (mJy)')
+    ax.loglog(m.sed_wave, (m.sed_emit + m.sed_scat), color="black",linestyle="--")
+    ax.loglog(m.sed_wave, m.sed_star, color="black",linestyle="-.")
+    ax.loglog(m.sed_wave, m.sed_star + m.sed_emit + m.sed_scat, color="black",linestyle="-")
+    ax.set_xlabel(r"$\lambda$ ($\mu$m)")
+    ax.set_ylabel(r"Flux density (mJy)")
     ax.set_xlim(m.parameters["lmin"],m.parameters["lmax"])
     if np.max(m.sed_star) > np.max((m.sed_emit + m.sed_scat)):
         ax.set_ylim(10**(np.log10(np.max((m.sed_emit + m.sed_scat))) - 4),10**(np.log10(np.max(m.sed_star)) + 1))
     else:
         ax.set_ylim(10**(np.log10(np.max(m.sed_star)) - 4),10**(np.log10(np.max((m.sed_emit + m.sed_scat))) + 1))    
-    fig.savefig(m.parameters['directory']+m.parameters['prefix']+'_sed.png',dpi=200)
+    fig.savefig(m.parameters["directory"]+m.parameters["prefix"]+"_sed.png",dpi=200)
     
     plt.close(fig)
 
@@ -63,10 +49,22 @@ start = time.time()
 print("Starting modelling run...")
 model = RTModel()
 print("Created RTModel object...")
-RTModel.get_parameters(model,'RTModel_Input_File.txt')
+RTModel.get_parameters(model,"RTModel_Input_File.txt")
+#
+# Read in photometry from data file (or otherwise) and 
+# assign to model here, e.g.:
+# 
+# wav, flx, unc = np.loadtxt("photometry.txt",delimiter=",",
+#                            comments="#", usecols=(0, 1), unpack=True)
+# model.obs_flux = flx
+# model.obs_uncs = unc
+# model.obs_wave = wav
+#
 print("Read in parameters...")
 RTModel.make_star(model)
 print("Created stellar model...")
+# RTModel.scale_star(model,lmin=0.45,lmax=5.0)
+# print("Scaled stellar model to photometry")
 RTModel.make_dust(model)
 print("Created dust size distribution model...")
 RTModel.make_disc(model)
@@ -77,7 +75,7 @@ RTModel.read_optical_constants(model)
 print("Read in dust optical constants...")
 RTModel.calculate_qabs(model)
 print("Calculated Qabs and Qsca...")
-RTModel.calculate_dust_emission(model,mode='full',tolerance=0.05)
+RTModel.calculate_dust_emission(model,mode="full",tolerance=1e-3)
 print("Calculated dust emission...")
 RTModel.calculate_dust_scatter(model)
 print("Caclulated dust scattering...")
