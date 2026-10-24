@@ -1,4 +1,4 @@
-wave, flux, uncs, refs
+#wave, flux, uncs, refs
 0.44, 1400., 10., B
 0.55, 2400., 20., V
 0.499,2120.,10.,GAIADR3_BP

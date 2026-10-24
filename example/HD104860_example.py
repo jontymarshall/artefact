@@ -52,19 +52,15 @@ def make_sed(m):
 target = "HD104860"
 
 #Photometry obtained using PySED to search selected Vizier catalogues
-phot_data = np.loadtxt(target+'_photometry.txt',delimiter=',',
-                        comments="#", usecols=(0, 1, 2), unpack=True)
-
-wav = phot_data['wave'].data
-flx = phot_data['flux'].data
-unc = phot_data['uncs'].data
+wav, flx, unc  = np.loadtxt(target+'_photometry.txt',delimiter=',',
+                            comments="#", usecols=(0, 1, 2), unpack=True)
 
 #benchmarking with time
 start = time.time()
 
 model = RTModel()
 
-RTModel.get_parameters(model,target+'_RTModel_Input_File.txt')
+RTModel.get_parameters(model,target+'_parameters.txt')
 
 model.obs_flux = flx
 model.obs_uncs = unc

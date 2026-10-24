@@ -1,0 +1,98 @@
+[build-system]
+# setuptools >= 77 is needed for the SPDX `license` string (PEP 639).
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artefact"
+dynamic = ["version"]  # single source of truth: __version__ in artefact.py
+description = "A 1D radiative transfer model for optically thin dust discs around stars"
+readme = "README.md"
+requires-python = ">=3.10"  # artefact.py uses `match` statements
+license = "GPL-3.0-only"
+authors = [{ name = "Jonathan P. Marshall" }]
+keywords = [
+    "astronomy",
+    "astrophysics",
+    "debris disc",
+    "radiative transfer",
+    "dust",
+    "spectral energy distribution",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+# Lower bounds are set by NumPy 2 support: artefact.py calls np.trapezoid
+# (added in NumPy 2.0), and the other libraries need releases built for NumPy 2.
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "numba>=0.60",
+    "astropy>=6.1",
+    "miepython>=2.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+dev = ["artefact[test]", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/jontymarshall/artefact"
+Issues = "https://github.com/jontymarshall/artefact/issues"
+Paper = "https://doi.org/10.1093/mnras/stad913"
+
+[tool.setuptools]
+py-modules = ["artefact"]
+
+[tool.setuptools.dynamic]
+# Read statically from the source, so building does not import numba/astropy.
+version = { attr = "artefact.__version__" }
+
+# ---------------------------------------------------------------------------
+# Tests: `pip install -e ".[test]"` then `pytest`
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]  # lets `import artefact` work without installing
+addopts = "-ra"
+filterwarnings = [
+    "error::SyntaxWarning:artefact",  # e.g. invalid escape sequences, `is` with a literal
+    "error::DeprecationWarning:artefact",  # e.g. deprecated NumPy functions
+]
+
+# ---------------------------------------------------------------------------
+# Style: `ruff format` and `ruff check`
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # isort
+    "N",       # pep8-naming
+    "UP",      # pyupgrade
+    "B",       # bugbear
+]
+ignore = [
+    "N803",  # argument names such as `T` (temperature) are conventional in physics code
+    "N806",  # likewise for local variables
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The BibTeX entry in __citation__ contains very long lines; consider moving it
+# to a CITATION.cff file and dropping this exception.
+"artefact.py" = ["E501"]
+"tests/*" = ["E501"]

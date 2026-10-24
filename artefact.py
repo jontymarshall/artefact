@@ -609,7 +609,7 @@ class RTModel:
                             qabs
                             * self.sed_star
                             * SI_PER_MJY
-                            * ((dstar * PC) / (rstar * R_SUN)) ** 2,
+                            * ((dstar * PC) / (rstar * R_SUN)) ** 2 / np.pi,
                             wav_m,
                         )
 
@@ -652,7 +652,7 @@ class RTModel:
 
         for ii in range(int(self.parameters["ngrain"])):
             x = 2.0 * np.pi * self.ag[ii] / self.sed_wave
-            qext, qsca, *_ = mpy.mie(self.oc_nk, x)
+            qext, qsca, *_ = mpy.efficiencies_mx(self.oc_nk, x)
 
             self.qext[ii, :] = qext
             self.qsca[ii, :] = qsca
