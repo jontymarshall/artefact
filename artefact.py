@@ -785,11 +785,10 @@ class RTModel:
         for ii in range(int(self.parameters["nring"])):
             for ij in range(int(self.parameters["ngrain"])):
                 scalefactor = (
-                    alb[ij, :]
+                    self.qsca[ij,:]
                     * self.sigma[ii, ij]
-                    * np.pi
-                    * ((self.ag[ij] * UM) ** 2)
-                    / (2 * self.radii[ii] * AU) ** 2
+                    * (self.ag[ij] * UM) ** 2
+                    / (4.0 * (self.radii[ii] * AU) ** 2)
                 )
 
                 self.sed_rings[ii, ij, :] += scalefactor * self.sed_star
