@@ -10,7 +10,12 @@ description = "A 1D radiative transfer model for optically thin dust discs aroun
 readme = "README.md"
 requires-python = ">=3.10"  # artefact.py uses `match` statements
 license = "GPL-3.0-only"
-authors = [{ name = "Jonathan P. Marshall" }]
+authors = [{ name = "Jonathan P. Marshall" }, 
+           { name = "Robin Young" }, 
+           { name = "Shane Hengst"}
+]
+maintainers = [{ name = "Jonathan P. Marshall"}
+]
 keywords = [
     "astronomy",
     "astrophysics",

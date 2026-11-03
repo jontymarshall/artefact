@@ -6,7 +6,7 @@ star in the optically thin limit, for several radial surface density
 distributions and a power-law grain size distribution.
 """
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 __author__ = "Jonathan P. Marshall"
 __email__ = ""
 __copyright__ = "2023-26, Jonathan P. Marshall"
@@ -143,6 +143,29 @@ def extrapolate_wavelengths(lambdas, wavelengths, photospheres, nwav=100):
 
     return lambda_ext, photosphere_ext
 
+
+def ring_grid(rmin, rmax, nring):
+    """
+    Divide [rmin, rmax] into nring equal-width annuli.
+
+    Parameters
+    ----------
+    rmin, rmax : float
+        Inner and outer edge of the disc in au.
+    nring : int
+        Number of annuli.
+
+    Returns
+    -------
+    edges : float array
+        The nring + 1 annulus boundaries in au.
+    radii : float array
+        The nring annulus mid-points in au, where the surface density is
+        evaluated and the dust temperature is calculated.
+
+    """
+    edges = np.linspace(rmin, rmax, num=nring + 1)
+    return edges, 0.5 * (edges[:-1] + edges[1:])
 
 @njit
 def calc_luminosity(rstar, tstar):
@@ -444,7 +467,7 @@ class RTModel:
 
         grain_sizes = np.geomspace(amin, amax, num=ngrain)
 
-        grain_numbers = grain_sizes**q
+        grain_numbers = grain_sizes ** (q + 1.0)
 
         grain_masses = (
             rho * G_CM3_TO_KG_M3 * (4.0 / 3.0) * np.pi * ((UM * grain_sizes) ** 3)
@@ -493,9 +516,8 @@ class RTModel:
                 upper = rpeak + 3.0 * (rfwhm / FWHM_PER_SIGMA)
                 if lower < 0.0:
                     lower = 1.0
-                radii = np.linspace(lower, upper, num=nring, endpoint=True)
+                edges, radii = ring_grid(lower, upper, nring)
                 rings = np.exp(-0.5 * ((radii - rpeak) / (rfwhm / FWHM_PER_SIGMA)) ** 2)
-                scale = rings / np.sum(rings)
 
             case "onepl":
                 # Single power law surface density model
@@ -504,9 +526,8 @@ class RTModel:
                 alpha = self.parameters["alpha_out"]
                 nring = int(self.parameters["nring"])
 
-                radii = np.linspace(rin, rout, num=nring, endpoint=True)
+                edges, radii = ring_grid(rin, rout, nring)
                 rings = (radii / rin) ** alpha
-                scale = rings / np.sum(rings)
 
             case "twopl":
                 # Two power law surface density model
@@ -517,11 +538,10 @@ class RTModel:
                 gamma = self.parameters["alpha_out"]
                 nring = int(self.parameters["nring"])
 
-                radii = np.linspace(rin, rout, num=nring, endpoint=True)
+                edges, radii = ring_grid(rin, rout, nring)
                 rings = (radii / rpeak) ** alpha
                 outer = np.where(radii > rpeak)
                 rings[outer] = (radii[outer] / rpeak) ** gamma
-                scale = rings / np.sum(rings)
 
             case "arbit":
                 raise NotImplementedError(
@@ -533,17 +553,13 @@ class RTModel:
                     f"'dtype' must be one of {valid_types}, got {dtype!r}."
                 )
 
-        self.scale = scale
+        self.edges = edges
         self.radii = radii
+        self.dr = edges[1] - edges[0]
+        self.areas = np.pi * (edges[1:] ** 2 - edges[:-1] ** 2) * AU**2  # m^2
 
-        self.dr = (radii[-1] - radii[0]) / nring
-
-        self.areas = (
-            (self.radii + 0.5 * self.dr) ** 2 - (self.radii - 0.5 * self.dr) ** 2
-        ) * AU**2
-
-        self.scale = self.scale * (self.areas / self.areas[0])
-        self.scale = self.scale / np.sum(self.scale)
+        grains_per_ring = rings * self.areas
+        self.scale = grains_per_ring / np.sum(grains_per_ring)
 
     def calculate_surface_density(self):
         """
@@ -684,8 +700,7 @@ class RTModel:
         for ii in range(int(self.parameters["nring"])):
             for ij in range(int(self.parameters["ngrain"])):
                 scalefactor = (
-                    self.qsca[ij, :]
-                    * alb[ij, :]
+                    alb[ij, :]
                     * self.sigma[ii, ij]
                     * np.pi
                     * ((self.ag[ij] * UM) ** 2)
@@ -722,15 +737,17 @@ class RTModel:
             )
         )
 
+        dstar_m = self.parameters["dstar"] * PC
+
         # Calculate emission
         for ii in range(int(self.parameters["nring"])):
             for ij in range(int(self.parameters["ngrain"])):
                 scalefactor = (
                     MJY_PER_SI
-                    * (2.0 * np.pi**2 / ((self.parameters["dstar"] * PC) ** 2))
+                    * np.pi
+                    * (self.ag[ij] * UM) ** 2
                     * self.sigma[ii, ij]
-                    * self.radii[ii] ** 2
-                    * (self.ag[ij] * UM) ** 3
+                    / dstar_m**2
                 )
 
                 self.tdust[ii, ij] = self.calculate_dust_temperature(

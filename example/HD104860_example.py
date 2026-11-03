@@ -83,7 +83,3 @@ print("Generated SED...")
 end = time.time()
 duration = end - start
 print("SED calculations took: ",duration," seconds.")
-
-end = time.time()
-multi_time = end - start
-print("SED calculations took: ",multi_time," seconds.")

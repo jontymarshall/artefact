@@ -415,9 +415,42 @@ def test_make_dust_size_distribution_and_mass_normalisation(model_factory):
     assert model.ag[0] == rel(0.5) and model.ag[-1] == rel(500.0)
     size_ratio = model.ag[1:] / model.ag[:-1]
     assert size_ratio == rel(np.full(6, size_ratio[0]), 1e-9)  # logarithmic spacing
-    assert model.ng[1:] / model.ng[:-1] == rel(size_ratio**-3.5, 1e-9)  # power law
+    # dN/da ~ a**q on a logarithmic grid (bin width ~ a) gives counts ~ a**(q + 1)
+    assert model.ng[1:] / model.ng[:-1] == rel(size_ratio**-2.5, 1e-9)
     assert model.mg == rel(4 / 3 * np.pi * (model.ag * UM) ** 3 * 3.0e3, 1e-12)
     assert np.sum(model.ng * model.mg) == rel(0.02 * art.M_EARTH, 1e-12)
+
+
+@pytest.mark.parametrize("q", [-3.5, -2.0, -4.0])
+def test_make_dust_counts_follow_the_differential_size_distribution(model_factory, q):
+    """Mueller (2007), Eq. 2.9: N(s) ds ~ s**-eta ds, with q = -eta."""
+    model = model_factory(amin=0.1, amax=1000.0, ngrain=40, q=q)
+    model.make_dust()
+    a = model.ag * UM
+    width = a * np.log(a[1] / a[0])  # bin width on the logarithmic grid
+    slope = np.polyfit(np.log(a), np.log(model.ng / width), 1)[0]
+    assert slope == pytest.approx(q, abs=1e-9)
+
+
+@pytest.mark.parametrize("q", [-3.5, -2.7, -4.2])  # not -3: Eq. 2.12 needs eta != 3
+def test_make_dust_mass_to_cross_section_ratio_matches_thesis_eq_2_12(model_factory, q):
+    """Eq. 2.12: M_d / S_d = (4 rho / 3) s0 (3-eta)/(4-eta) * [...]/[...]."""
+    rho_si, eta = 2.5e3, -q
+    model = model_factory(amin=0.1, amax=1000.0, ngrain=400, q=q, density=2.5)
+    model.make_dust()
+    a = model.ag * UM
+
+    cross_section = np.pi * np.sum(model.ng * a**2)  # S_d
+    mass = np.sum(model.ng * model.mg)  # M_d
+    s_min, s_max = a[0], a[-1]  # s0 = 1 m cancels in the ratio
+    expected = (
+        (4 * rho_si / 3)
+        * (3 - eta)
+        / (4 - eta)
+        * (s_max ** (4 - eta) - s_min ** (4 - eta))
+        / (s_max ** (3 - eta) - s_min ** (3 - eta))
+    )
+    assert mass / cross_section == rel(expected, 2e-2)  # the sum is a quadrature
 
 
 def test_read_optical_constants_interpolates_and_forces_absorbing_sign(tmp_path, model_factory):
@@ -450,20 +483,37 @@ def test_make_disc_basic_invariants(model_factory, dtype, extra):
     model = model_factory(dtype=dtype, nring=25, **extra)
     model.make_disc()
     assert model.radii.shape == model.scale.shape == model.areas.shape == (25,)
+    assert model.edges.shape == (26,)
     assert np.all(np.diff(model.radii) > 0)
     assert np.all(model.scale >= 0) and np.sum(model.scale) == rel(1.0, 1e-12)
-    assert model.dr == rel((model.radii[-1] - model.radii[0]) / 25)
+    # The annuli tile the disc: equal widths, radii at the mid-points, exact areas.
+    assert model.dr == rel((model.edges[-1] - model.edges[0]) / 25)
+    assert np.diff(model.edges) == rel(np.full(25, model.dr), 1e-10)
+    assert model.radii == rel(0.5 * (model.edges[1:] + model.edges[:-1]), 1e-12)
     assert np.all(model.areas > 0)
+    total = np.pi * (model.edges[-1] ** 2 - model.edges[0] ** 2) * art.AU**2
+    assert np.sum(model.areas) == rel(total, 1e-12)
 
 
 def test_make_disc_single_power_law_weights_follow_ring_area(model_factory):
-    # Linear radial spacing means ring area is proportional to radius, so the
-    # ring weights must scale as r**(alpha + 1).
+    # Equal-width annuli have area proportional to their mid-point radius, so the
+    # number of grains per ring, N(r) * area, scales as r**(alpha + 1).
     model = model_factory(dtype="onepl", rin=40.0, rout=80.0, alpha_out=-1.5, nring=11)
     model.make_disc()
-    assert model.radii[0] == rel(40.0) and model.radii[-1] == rel(80.0)
+    assert model.edges[0] == rel(40.0) and model.edges[-1] == rel(80.0)
     expected = model.radii ** (-1.5 + 1.0)
     assert model.scale == rel(expected / expected.sum(), 1e-10)
+
+
+@pytest.mark.parametrize("alpha", [-1.5, -1.0, 0.0])
+def test_make_disc_ring_weights_match_the_analytic_radial_integral(model_factory, alpha):
+    """Mueller (2007), Eq. 2.17: grains per annulus = integral of N(r) 2 pi r dr."""
+    model = model_factory(dtype="onepl", rin=40.0, rout=80.0, alpha_out=alpha, nring=200)
+    model.make_disc()
+    edges = model.edges
+    p = alpha + 2.0  # integral of r**alpha * r dr = r**p / p
+    exact = (edges[1:] ** p - edges[:-1] ** p) / p
+    assert model.scale == rel(exact / exact.sum(), 1e-4)
 
 
 def test_make_disc_two_power_law_has_continuous_break(model_factory):
@@ -480,8 +530,8 @@ def test_make_disc_two_power_law_has_continuous_break(model_factory):
 def test_make_disc_gaussian_clips_inner_edge_to_one_au(model_factory):
     model = model_factory(dtype="gauss", rpeak=5.0, rfwhm=20.0, nring=9)
     model.make_disc()
-    assert model.radii[0] == rel(1.0)
-    assert model.radii[-1] == rel(5.0 + 3.0 * 20.0 / art.FWHM_PER_SIGMA)
+    assert model.edges[0] == rel(1.0)
+    assert model.edges[-1] == rel(5.0 + 3.0 * 20.0 / art.FWHM_PER_SIGMA)
 
 
 def test_make_disc_rejects_unknown_and_unimplemented_types(model_factory):
@@ -498,7 +548,7 @@ def test_surface_density_distributes_each_grain_size_over_the_rings(model_factor
     model.calculate_surface_density()
     assert model.sigma.shape == (7, 5)
     assert model.sigma == rel(np.outer(model.scale, model.ng), 1e-12)
-    assert model.sigma.sum(axis=0) == rel(model.ng, 1e-12)
+    assert model.sigma.sum(axis=0) == rel(model.ng, 1e-12)  # a count, not a density
 
 
 # ---------------------------------------------------------------------------
@@ -642,6 +692,70 @@ def test_calculate_dust_emission_structure_and_temperatures(disc_model):
     assert model.sed_ringe.shape == (nring, ngrain, nwav)
     assert np.all(model.sed_ringe >= 0) and np.all(np.isfinite(model.sed_ringe))
     assert model.sed_emit == rel(model.sed_ringe.sum(axis=(0, 1)), 1e-12)
+
+
+def test_calculate_dust_emission_scales_as_grain_number_times_cross_section(disc_model):
+    """Eq. 2.25: each grain contributes pi a^2 Q_abs B_lambda / d^2, whatever the
+    ring radius or grain size. With grey grains and the blackbody temperature law
+    the temperature does not depend on grain size, so the ratio of emission to
+    (grain count * cross-section) must be the same for every grain size."""
+    model = disc_model
+    model.qabs = np.ones_like(model.qabs)
+    model.calculate_dust_emission(mode="bb")
+
+    cross_section = np.pi * (model.ag * UM) ** 2
+    per_grain = model.sed_ringe / (model.sigma * cross_section)[:, :, None]
+    for j in range(1, len(model.ag)):
+        assert per_grain[:, j, :] == rel(per_grain[:, 0, :], 1e-10)
+
+    # ... and the emission of one grain is pi a^2 B_lambda(T) / d^2, in mJy per m
+    d = BASE_PARAMS["dstar"] * art.PC
+    expected = art.MJY_PER_SI * art.planck_lam(model.sed_wave * UM, model.tdust[2, 1]) / d**2
+    assert per_grain[2, 1, :] == rel(expected, 1e-10)
+
+
+def test_calculate_dust_emission_falls_as_distance_squared(model_factory):
+    fluxes = []
+    for dstar in (10.0, 20.0):
+        model = model_factory(dstar=dstar, lmin=0.1, lmax=1e4, nwav=300, ngrain=3, nring=4)
+        model.make_star()
+        model.make_dust()
+        model.make_disc()
+        model.calculate_surface_density()
+        model.qabs = np.ones((3, 300))
+        model.calculate_dust_emission(mode="bb")
+        fluxes.append(model.sed_emit)
+    assert fluxes[0] == rel(4.0 * fluxes[1], 1e-10)
+
+
+@pytest.mark.parametrize("dtype,extra", DISC_CASES)
+@pytest.mark.parametrize("q", [-3.5, -2.5])
+def test_calculate_dust_emission_conserves_energy(model_factory, dtype, extra, q):
+    """Mueller (2007), Eqs. 2.20-2.28: in equilibrium every grain re-emits the
+    starlight it absorbs, so the luminosity of the thermal SED must equal the
+    absorbed stellar luminosity pi a^2 Q L* / (4 pi r^2), summed over all grains.
+    This fixes the absolute amplitude of the emission, not just its shape."""
+    nwav, ngrain = 2500, 6
+    model = model_factory(
+        dtype=dtype, q=q, lmin=0.1, lmax=1e4, nwav=nwav, ngrain=ngrain, nring=12, **extra
+    )
+    model.make_star()
+    model.make_dust()
+    model.make_disc()
+    model.calculate_surface_density()
+    model.qabs = np.ones((ngrain, nwav))  # black bodies: Q_abs = 1 at all wavelengths
+    model.calculate_dust_emission(mode="full", tolerance=1e-10)
+
+    lum_star = 4 * np.pi * art.R_SUN**2 * art.SIGMA_SB * BASE_PARAMS["tstar"] ** 4
+    r = model.radii[:, None] * art.AU
+    a = model.ag[None, :] * UM
+    absorbed = np.sum(model.sigma * np.pi * a**2 * lum_star / (4 * np.pi * r**2))
+
+    d = BASE_PARAMS["dstar"] * art.PC
+    flux = model.sed_emit / art.MJY_PER_SI  # W/m2/m at the observer
+    emitted = 4 * np.pi * d**2 * np.trapezoid(flux, model.sed_wave * UM)
+
+    assert emitted == rel(absorbed, 5e-3)
 
 
 def test_calculate_dust_emission_bb_mode_and_tolerance(disc_model):
