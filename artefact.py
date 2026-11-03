@@ -187,9 +187,94 @@ def calc_luminosity(rstar, tstar):
     lphot = (4.0 * np.pi * SIGMA_SB * (rstar * R_SUN) ** 2 * tstar**4) / L_SUN
     return lphot
 
+def _size_integral(s0, s1, exponent):
+    """
+    Integral of s**(exponent - 1) ds from s0 to s1, 
+    i.e. (s1^e - s0^e) / e.
+    """
+    if abs(exponent) < 1e-12:
+        return np.log(s1 / s0)
+    return (s1**exponent - s0**exponent) / exponent
+
+def disc_mass_three_slope(mdust,q,amin,amax,smm=S_MM,skm=S_KM,smax=S_MAX,
+    q_med=Q_MED,q_big=Q_BIG,rho_ratio=1.0,exact=False):
+    """
+    Calculate total disc mass from the dust mass, for the three-slope size 
+    distribution of Krivov & Wyatt (2021, MNRAS 500, 718).
+
+    The size distribution n(s) ~ s**-q has slope q for dust (s < smm), q_med for
+    the collisional cascade (smm < s < skm) and q_big for primordial planetesimals
+    (skm < s < smax), and is continuous in mass at each break. The dust mass M_d
+    of the paper is the mass in grains up to smm, so the model dust mass, which
+    covers amin to amax, is first rescaled to that range using the dust slope.
+
+    Parameters
+    ----------
+    mdust : float
+        Dust mass of the model (any mass unit; the result has the same unit).
+    q : float
+        Dust size-distribution exponent as used by RTModel, dN/da ~ a**q
+        (negative, e.g. -3.5). The paper's slope is -q.
+    amin, amax : float
+        Smallest and largest grain size of the model in um.
+    smm, skm, smax : float
+        Break sizes and largest body in um (defaults: 1 mm, 1 km, 200 km).
+    q_med, q_big : float
+        Slopes (positive) of the cascade and the primordial segments.
+    rho_ratio : float
+        rho_big / rho_dust, applied if the number rather than the mass
+        distribution is continuous at s_km (paper, below Eq. 9). Default 1.
+    exact : bool
+        False (default) uses the paper's Eq. 9, which neglects the mass in the
+        dust and cascade segments (a few per cent). True integrates all three
+        segments.
+
+    Returns
+    -------
+    mdisc : float
+        Total mass of bodies up to smax, in the unit of ``mdust``.
+
+    """
+    if q >= 0:
+        raise ValueError(f"q must be negative (dN/da ~ a**q), got {q!r}.")
+    qd = -q
+    if not amin < smm < skm < smax:
+        raise ValueError("Sizes must satisfy amin < smm < skm < smax, got "
+            f"{amin!r}, {smm!r}, {skm!r}, {smax!r}.")
+    if max(qd, q_med, q_big) >= 4.0:
+        raise ValueError("All slopes must be below 4 for the mass to be finite.")
+    if amax <= amin:
+        raise ValueError(f"amax must exceed amin, got {amax!r} and {amin!r}.")
+
+    # M_d: mass of grains with s <= smm (mass per ds ~ s**(3 - q)), scaled from the
+    # model range amin..amax. Extrapolates if amax < smm and clips if amax > smm.
+    e_dust = 4.0 - qd
+    mass_d = (
+        mdust * _size_integral(amin, smm, e_dust) / _size_integral(amin, amax, e_dust)
+    )
+
+    if not exact:  # Eq. 9
+        factor = ((4.0 - qd) / (4.0 - q_big)
+            * (skm / smm) ** (4.0 - q_med)
+            * (smax / skm) ** (4.0 - q_big)
+        )
+        return mass_d * factor * rho_ratio
+
+    # All three segments, with n(s) continuous at smm and skm
+    i_dust = _size_integral(amin, smm, e_dust)
+    i_med = smm ** (q_med - qd) * _size_integral(smm, skm, 4.0 - q_med)
+    i_big = (
+        smm ** (q_med - qd)
+        * skm ** (q_big - q_med)
+        * _size_integral(skm, smax, 4.0 - q_big)
+    )
+
+    return mass_d * (i_dust + i_med + rho_ratio * i_big) / i_dust
+
 
 class RTModel:
-    """Optically thin radiative transfer model of a dusty circumstellar disc.
+    """
+    Optically thin radiative transfer model of a dusty circumstellar disc.
 
     Model parameters are read from a plain text file by `get_parameters` and
     stored in the `parameters` dictionary. The methods depend on each other's
@@ -789,3 +874,61 @@ class RTModel:
         # Total disc model
         parts = [s for s in (self.sed_emit, self.sed_scat) if s is not None]
         self.sed_disc = sum(parts) if parts else None
+
+    def calculate_disc_mass(
+        self,
+        smm=S_MM,
+        skm=S_KM,
+        smax=S_MAX,
+        q_med=Q_MED,
+        q_big=Q_BIG,
+        rho_big=None,
+        exact=False,
+        mdust=None
+    ):
+        """
+        Estimate the total disc mass from the fitted dust mass.
+
+        Run this after the SED fit has set ``parameters["mdust"]``. It extends the
+        dust size distribution (slope ``-q``, grains ``amin`` to ``amax``) to
+        planetesimals with the three-slope approximation of Krivov & Wyatt (2021,
+        Eq. 9); see ``disc_mass_three_slope``. Sets and returns self.mdisc.
+
+        Parameters
+        ----------
+        smm, skm, smax : float
+            Break sizes and largest body in um (1 mm, 1 km, 200 km by default).
+        q_med, q_big : float
+            Slopes of the cascade and primordial segments (3.7 and 2.8).
+        rho_big : float, optional
+            Density of the large bodies in g/cm3, if the number rather than the
+            mass distribution is continuous at ``skm``.
+        exact : bool
+            Integrate all segments instead of using the paper's Eq. 9.
+        mdust : float, optional
+            Dust mass in Earth masses; defaults to ``parameters["mdust"]``.
+
+        Returns
+        -------
+        mdisc : float
+            Total disc mass in Earth masses.
+
+        """
+        if mdust is None:
+            mdust = self.parameters["mdust"]
+        rho_ratio = 1.0 if rho_big is None else rho_big / self.parameters["density"]
+
+        self.mdisc = disc_mass_three_slope(
+            mdust,
+            self.parameters["q"],
+            self.parameters["amin"],
+            self.parameters["amax"],
+            smm=smm,
+            skm=skm,
+            smax=smax,
+            q_med=q_med,
+            q_big=q_big,
+            rho_ratio=rho_ratio,
+            exact=exact,
+        )
+        return self.mdisc
