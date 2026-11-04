@@ -607,6 +607,52 @@ def test_calculate_dust_scatter_structure_and_scaling(disc_model):
         assert per_ring == rel(np.broadcast_to(per_ring[0], per_ring.shape), 1e-10)
 
 
+def test_calculate_dust_scatter_matches_the_isotropic_scattering_formula(disc_model):
+    """Each grain scatters pi a^2 Q_sca L / (4 pi r^2) isotropically, so the observed
+    flux is the stellar flux times N a^2 Q_sca / (4 r^2): no extra pi, no albedo."""
+    model = disc_model
+    model.calculate_dust_scatter()
+    for i in (0, 3):
+        for j in (0, 2):
+            n, a, r = model.sigma[i, j], model.ag[j] * UM, model.radii[i] * art.AU
+            expected = model.sed_star * model.qsca[j] * n * a**2 / (4 * r**2)
+            assert model.sed_rings[i, j] == rel(expected, 1e-12)
+
+
+def test_calculate_dust_scatter_is_linear_in_qsca_at_fixed_extinction(disc_model):
+    """Q_sca already holds the albedo: doubling it at fixed Q_ext doubles the
+    scattered light. Applying the albedo a second time would quadruple it."""
+    model = disc_model
+    model.calculate_dust_scatter()
+    first = model.sed_scat.copy()
+    model.qsca = 2.0 * model.qsca
+    model.calculate_dust_scatter()
+    assert model.sed_scat == rel(2.0 * first, 1e-12)
+
+
+def test_scattered_and_thermal_light_carry_the_same_fraction_of_the_starlight(model_factory):
+    """With Q_sca = Q_abs = 1 a grain re-emits as much power thermally as it
+    scatters, so the scattered SED must hold the same fraction of the stellar
+    luminosity as the thermal SED (Mueller 2007, Eqs. 2.20-2.22)."""
+    nwav, ngrain = 2500, 5
+    model = model_factory(lmin=0.1, lmax=1e4, nwav=nwav, ngrain=ngrain, nring=10)
+    model.make_star()
+    model.make_dust()
+    model.make_disc()
+    model.calculate_surface_density()
+    model.qabs = np.ones((ngrain, nwav))
+    model.qsca = np.ones((ngrain, nwav))
+    model.qext = model.qabs + model.qsca
+    model.calculate_dust_emission(tolerance=1e-10)
+    model.calculate_dust_scatter()
+
+    lam = model.sed_wave * UM
+    lum_scat = np.trapezoid(model.sed_scat, lam)
+    lum_star = np.trapezoid(model.sed_star, lam)
+    lum_emit = np.trapezoid(model.sed_emit, lam)
+    assert lum_scat / lum_star == rel(lum_emit / lum_star, 5e-3)
+
+
 def test_calculate_dust_scatter_is_linear_in_the_stellar_spectrum(disc_model):
     model = disc_model
     model.calculate_dust_scatter()
@@ -864,3 +910,110 @@ def test_full_pipeline_from_parameter_and_optical_constant_files(tmp_path, monke
     assert model.sigma.shape == (4, 4)
     assert np.all(np.isfinite(model.sed_disc)) and np.all(model.sed_disc > 0)
     assert model.sed_disc == rel(model.sed_emit + model.sed_scat, 1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 7. Disc mass from the dust mass (Krivov & Wyatt 2021, three-slope size law)
+# ---------------------------------------------------------------------------
+
+
+def numerical_mass_ratio(q, amin, smm, skm, smax, q_med, q_big, rho_ratio=1.0):
+    """Total mass / mass up to smm, by brute-force integration of n(s) on a log grid."""
+    s = np.geomspace(amin, smax, 400_001)
+    n = np.where(
+        s < smm,
+        s**-q,
+        np.where(
+            s < skm,
+            smm ** (q_med - q) * s**-q_med,
+            rho_ratio * smm ** (q_med - q) * skm ** (q_big - q_med) * s**-q_big,
+        ),
+    )
+    mass_per_ln_s = n * s**4
+    ln_s = np.log(s)
+    below = s <= smm
+    return np.trapezoid(mass_per_ln_s, ln_s) / np.trapezoid(mass_per_ln_s[below], ln_s[below])
+
+
+def test_disc_mass_reproduces_eq_9_for_the_fiducial_parameters():
+    # Eq. 9 with q = 3.5, q_med = 3.7, q_big = 2.8, s_km/s_mm = 1e6, s_max/s_km = 200
+    expected = (0.5 / 1.2) * (1e6) ** 0.3 * 200.0**1.2
+    result = art.disc_mass_three_slope(1.0, -3.5, amin=1.0, amax=art.S_MM)
+    assert result == rel(expected, 1e-10)
+    assert result == pytest.approx(1.517e4, rel=1e-3)
+
+
+def test_disc_mass_exact_integration_matches_a_numerical_integral():
+    exact = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, exact=True)
+    expected = numerical_mass_ratio(3.5, 1.0, 1e3, 1e9, 2e11, 3.7, 2.8)
+    assert exact == rel(expected, 1e-3)
+    # Eq. 9 neglects the dust and cascade mass: a few per cent low, never high
+    approx = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3)
+    assert 0.9 < approx / exact < 1.0
+
+
+def test_disc_mass_rescales_the_model_dust_mass_to_the_mm_size_limit():
+    # The paper's M_d covers grains up to 1 mm. A model that stops at 100 um holds
+    # less mass than that (extrapolated with the dust slope); one that goes to
+    # 10 mm holds more, and only the part below 1 mm counts.
+    full = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3)
+    small = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e2)
+    large = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e4)
+    ratio = lambda amax: (amax**0.5 - 1.0) / (1e3**0.5 - 1.0)  # mass up to amax, q = 3.5
+    assert small == rel(full / ratio(1e2), 1e-10)
+    assert large == rel(full / ratio(1e4), 1e-10)
+    assert small > full > large
+
+
+def test_disc_mass_is_linear_in_dust_mass_and_scales_with_the_density_ratio():
+    base = art.disc_mass_three_slope(2.0, -3.5, 1.0, 1e3)
+    assert art.disc_mass_three_slope(6.0, -3.5, 1.0, 1e3) == rel(3 * base, 1e-12)
+    assert art.disc_mass_three_slope(2.0, -3.5, 1.0, 1e3, rho_ratio=0.4) == rel(0.4 * base)
+    exact = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, exact=True, rho_ratio=0.5)
+    assert exact == rel(numerical_mass_ratio(3.5, 1.0, 1e3, 1e9, 2e11, 3.7, 2.8, 0.5), 1e-3)
+
+
+def test_disc_mass_responds_to_the_break_size_and_slopes_as_eq_9_predicts():
+    base = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3)
+    assert art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, smax=2e10) < base  # smaller bodies
+    assert art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, q_big=3.0) < base  # steeper
+    # Eq. 9 scales as s_km**(q_big - q_med) = s_km**-0.9: a tenfold smaller s_km
+    # lets the shallow primordial slope act sooner and raises the mass by 10**0.9.
+    lower_break = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, skm=1e8)
+    assert lower_break == rel(base * 10**0.9, 1e-10)
+
+
+@pytest.mark.parametrize(
+    "kwargs,message",
+    [
+        (dict(q=3.5), "negative"),
+        (dict(smm=0.5), "amin < smm"),
+        (dict(skm=500.0), "amin < smm"),
+        (dict(smax=1e8), "amin < smm"),
+        (dict(q_big=4.0), "below 4"),
+        (dict(q=-4.5), "below 4"),
+        (dict(amax=1.0), "amax"),
+    ],
+)
+def test_disc_mass_rejects_unphysical_input(kwargs, message):
+    args = dict(mdust=1.0, q=-3.5, amin=1.0, amax=1e3)
+    args.update(kwargs)
+    with pytest.raises(ValueError, match=message):
+        art.disc_mass_three_slope(**args)
+
+
+def test_calculate_disc_mass_uses_the_fitted_parameters(model_factory):
+    model = model_factory(amin=1.0, amax=1000.0, q=-3.5, mdust=0.02, density=2.5)
+    assert model.mdisc is None
+    result = model.calculate_disc_mass()
+    assert result is model.mdisc
+    assert result == rel(0.02 * art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3), 1e-12)
+
+    # A refitted dust mass is picked up, and can also be passed explicitly.
+    model.parameters["mdust"] = 0.05
+    assert model.calculate_disc_mass() == rel(2.5 * result, 1e-12)
+    assert model.calculate_disc_mass(mdust=0.02) == rel(result, 1e-12)
+
+    # A lower-density planetesimal population (number-continuous case)
+    assert model.calculate_disc_mass(mdust=0.02, rho_big=1.0) == rel(0.4 * result, 1e-12)
+    assert model.calculate_disc_mass(mdust=0.02, exact=True) > result

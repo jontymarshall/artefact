@@ -1,0 +1,14 @@
+1. Resolved images from the radial profiles
+
+Utility: SED fits are degenerate between grain size, radius and temperature. A model image, compared with resolved ALMA, Herschel or SPHERE data, breaks that degeneracy and tests the radial profile directly.
+Implementation: Add make_image(wavelength, inc, pa, npix, pixscale, beam). Sum sed_ringe over grains at the chosen wavelength to get each ring’s flux. Divide by areas for surface brightness, then interpolate onto pixel radii after deprojecting for inclination (r² = x² + (y/cos i)²). Convolve with a Gaussian beam or PSF, and normalise so the image sums to the ring flux. Write a FITS file with WCS. Scattered light also needs a Henyey–Greenstein phase function.
+
+2. Arbitrary and multi-belt profiles, with a physical blow-out size
+
+Utility: This fills the unimplemented arbit branch, so you can use profiles measured from images. It also handles warm-plus-cold belt systems and replaces the free parameter amin with a derived size.
+Implementation: Implement arbit to read an (r, N(r)) table and interpolate it onto ring_grid annuli. Let dtype accept a list of components, each with its own profile, mass fraction and optional composition, and sum their sed_emit. Set amin to the size where β = 3LQ_pr/(16πGMcρs) = 0.5 (Müller Eq. 2.44), taking Q_pr from the Mie output.
+
+3. Joint SED and radial-profile fitting with uncertainties
+
+Utility: The SED fit currently lives outside the code. Built-in sampling gives posteriors on mdust, rin and q, and carries them through calculate_disc_mass into a disc-mass distribution with error bars.
+Implementation: Add log_likelihood(theta), which updates parameters, runs the pipeline from make_dust to calculate_dust_emission, and returns χ² against photometry, plus an observed radial profile if given. Cache the Mie qabs per (amin, amax, composition) and vectorise the ring loop, since the temperature solves dominate the cost. Sample with emcee or dynesty and pass each posterior draw to calculate_disc_mass.
