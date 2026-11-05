@@ -1,3 +1,10 @@
+from dataclasses import dataclass
+
+import numpy as np
+from scipy.ndimage import gaussian_filter
+from scipy.signal import fftconvolve
+from astropy.io import fits
+
 # Defaults for model images
 ASPECT_RATIO = 0.03  # scale height over radius, H / r
 HG_G1 = 0.7  # forward-scattering asymmetry parameter of the first component
@@ -34,8 +41,6 @@ def convolve_beam(image, beam):
         Image in flux per pixel, with the same shape as ``image``.
 
     """
-    from scipy.ndimage import gaussian_filter
-    from scipy.signal import fftconvolve
 
     if hasattr(beam, "array"):
         beam = beam.array
@@ -260,7 +265,6 @@ class ModelImage:
 
     def writeto(self, filename, overwrite=True):
         """Write the image to a FITS file (requires astropy)."""
-        from astropy.io import fits
 
         hdu = fits.PrimaryHDU(np.asarray(self.data, dtype=np.float32))
         for key, value in self.header().items():

@@ -16,6 +16,21 @@ import numpy as np
 from numba import njit
 from scipy.optimize import brentq, curve_fit
 
+from .fitting import Photometer
+from .image import (
+    ASPECT_RATIO,
+    HG_G1,
+    HG_G2,
+    HG_WEIGHT,
+    MIN_ASPECT,
+    MIN_INC,
+    ModelImage,
+    convolve_beam,
+    disc_surface_brightness,
+    two_component_hg,
+)
+from .phoenix import FEH_PRIOR, LOGG_PRIOR, fit_star, load_grid
+
 
 # Physical constants (SI units)
 H_PLANCK = const.h.value  # 6.626e-34 J s
@@ -34,7 +49,8 @@ MJY_PER_SI = 1e3 * 1e26  # 1 W/m2/Hz expressed in mJy
 SI_PER_MJY = 1e-26 * 1e-3  # 1 mJy expressed in W/m2/Hz
 CGS_FLAM_TO_SI = 1e-7 * 1e4 * 1e10  # erg/s/cm2/A -> W/m2/m
 G_CM3_TO_KG_M3 = 1e3  # grain density: g/cm3 -> kg/m3
-FWHM_PER_SIGMA = 2.355  # approximately 2 * sqrt(2 * ln(2))
+FWHM_PER_SIGMA = np.sqrt(8.0 * np.log(2.0))
+FWHM_TO_SIGMA  = 1.0 / np.sqrt(8.0 * np.log(2.0))
 T_CMB = 2.73  # K, lower bound of the dust temperature search
 T_BB_1AU = 278.0  # K, blackbody temperature at 1 au from a 1 L_sun star
 SCALE_WAVE_MIN = 0.44  # um, lower limit of photometry used by scale_star
@@ -88,6 +104,19 @@ def planck_nu(freq, T):
     b = H_PLANCK * freq / (K_B * T)
     intensity = a / ((C_LIGHT**2) * (np.exp(b) - 1.0))
     return intensity
+
+
+def mie_efficiencies(m, x):
+    """
+    Mie efficiencies (qext, qsca, qback, g) of spheres with refractive index m
+    and size parameters x.
+
+    miepython 3 renamed ``mie`` to ``efficiencies_mx`` (same arguments and
+    return values); this uses whichever the installed version has.
+    """
+    if hasattr(mpy, "efficiencies_mx"):
+        return mpy.efficiencies_mx(m, x)
+    return mpy.mie(m, x)
 
 
 def extrapolate_wavelengths(lambdas, wavelengths, photospheres, nwav=100):
@@ -325,6 +354,8 @@ class RTModel:
         self.obs_flux = None
         self.obs_uncs = None
         self.obs_wave = None
+        self.obs_band = None  # optional band names (data/filters.yaml), for filter-integrated fits
+        self.stellarfit = None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
 
         # Dust grains
         self.ag = None
@@ -383,8 +414,9 @@ class RTModel:
 
         """
 
-        rstar = self.parameters["rstar"]
-        tstar = self.parameters["tstar"]
+        # rstar and tstar are outputs of the "phoenix" fit, so they need not be given for it
+        rstar = self.parameters.get("rstar")
+        tstar = self.parameters.get("tstar")
         dstar = self.parameters["dstar"]
 
         lmin = self.parameters["lmin"]
@@ -394,7 +426,7 @@ class RTModel:
         wavelengths = np.geomspace(lmin, lmax, num=nwav)  # um
 
         stype = self.parameters["stype"]
-        valid_types = ["blackbody", "spectrum", "json"]
+        valid_types = ["blackbody", "spectrum", "json", "phoenix"]
 
         match stype:
             case "blackbody":
@@ -431,14 +463,8 @@ class RTModel:
                 )
 
             case "phoenix":
-                lambdas, photosphere = self.fit_phoenix()
-
-                if np.max(wavelengths) > np.max(lambdas):
-                    lambdas, photosphere = extrapolate_wavelengths(
-                        lambdas, wavelengths, photosphere, nwav=100
-                    )
-
-                photosphere = np.interp(wavelengths, lambdas, photosphere)
+                # the grid continues as a Rayleigh-Jeans tail past 5.4 um, so it covers any wavelength
+                _, photosphere = self.fit_phoenix(wavelengths)
                 photosphere *= MJY_PER_SI
 
             case _:
@@ -504,11 +530,11 @@ class RTModel:
         return model_waves, model_spect
 
 
-    def fit_phoenix(self,lmin=SCALE_WAVE_MIN,lmax=SCALE_WAVE_MAX)
+    def fit_phoenix(self,model_waves=None):
         """
         Fit a stellar photosphere model from a pre-compiled PHOENIX grid file.
 
-        PHOENIX models have wavelengths in microns and flux density in Jy.
+        PHOENIX models have wavelengths in microns and flux densities in Jy.
 
         Returns
         -------
@@ -519,34 +545,54 @@ class RTModel:
 
         """
 
-        phoenix_photometry = Photometer()
-        phoenix_photometry.wave_um = self.obs_wave
-        phoenix_photometry.flux_jy = self.obs_flux*1e3
-        phoenix_photometry.err_jy  = self.obs_uncs*1e3
+        if model_waves is None:
+            model_waves = np.geomspace(self.parameters["lmin"], self.parameters["lmax"],
+                                       num=int(self.parameters["nwav"]))
+        model_waves = np.asarray(model_waves)
 
-        phoenix_grid = load_grid()
+        if self.obs_wave is None or self.obs_flux is None or self.obs_uncs is None:
+            raise ValueError("fit_phoenix needs obs_wave, obs_flux and obs_uncs (mJy).")
+
+        # asarray first, so lists of observations work too
+        wave_um = np.asarray(self.obs_wave, dtype=float)
+        flux_jy = np.asarray(self.obs_flux, dtype=float) * 1e-3  # mJy -> Jy
+        err_jy = np.asarray(self.obs_uncs, dtype=float) * 1e-3
+
+        if self.obs_band is not None:
+            # bands with a filter in data/filters.yaml are integrated over it
+            phoenix_photometry = Photometer.from_bands(self.obs_band, wave_um, flux_jy, err_jy)
+        else:
+            # no band names: the model is compared at each point's wavelength
+            phoenix_photometry = Photometer(wave_um, flux_jy, err_jy)
+
+        logg_prior = (self.parameters.get("logg_prior",LOGG_PRIOR[0]),
+                      self.parameters.get("logg_prior_sigma",LOGG_PRIOR[1]))
+
+        feh_prior = (self.parameters.get("feh_prior",FEH_PRIOR[0]),
+                     self.parameters.get("feh_prior_sigma",FEH_PRIOR[1]))
 
         stellarfit = fit_star(phoenix_photometry,
                                 self.parameters["dstar"],
-                                phoenix_grid,
-                                teff_start = 6000.0,
-                                logg = 4.5,
-                                mh = 0.0,
+                                load_grid(),
+                                distance_err_pc=self.parameters.get("dstar_err"),
+                                logg=logg_prior[0],
+                                mh=feh_prior[0],
+                                logg_prior=logg_prior,
+                                mh_prior=feh_prior,
                                 fit_surface = True,
                               )
 
-        model_spect = stellarfit.model_for(stellarfit.params,model_waves)
+        model_spect = stellarfit.flux_at(model_waves)
 
         #write parameters into model object.
-        self.parameters["lstar"] = stellarfit.luminosity_lsun
-        self.parameters["tstar"] = stellarfit.teff
-        self.parameters["rstar"] = stellarfit.radius_rsun
-        self.parameters["logg"]  = stellarfit.logg
-        self.parameters["feh"]   = stellarfit.feh
+        self.parameters["lstar"] = stellarfit.luminosity_lsun.value
+        self.parameters["tstar"] = stellarfit.teff.value
+        self.parameters["rstar"] = stellarfit.radius_rsun.value
+        self.parameters["logg"]  = stellarfit.logg.value
+        self.parameters["feh"]   = stellarfit.feh.value
         self.stellarfit          = stellarfit #for uncertainties
 
-        # Jy -> W/m2/m
-        model_spect *= 1e-26 * C_LIGHT / (model_waves * UM) ** 2  # W/m2/m
+        model_spect *= 1e-26 * C_LIGHT / (model_waves * UM) ** 2  # Jy -> W/m2/m
 
         return model_waves, model_spect
 
@@ -821,7 +867,7 @@ class RTModel:
 
         for ii in range(int(self.parameters["ngrain"])):
             x = 2.0 * np.pi * self.ag[ii] / self.sed_wave
-            qext, qsca, *_ = mpy.mie(self.oc_nk, x)
+            qext, qsca, *_ = mie_efficiencies(self.oc_nk, x)
 
             self.qext[ii, :] = qext
             self.qsca[ii, :] = qsca

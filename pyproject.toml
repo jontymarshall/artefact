@@ -45,6 +45,7 @@ dependencies = [
     "astropy>=6.1",
     "miepython>=2.0",
     "lmfit>=1.3.4",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
@@ -57,11 +58,19 @@ Issues = "https://github.com/jontymarshall/artefact/issues"
 Paper = "https://doi.org/10.1093/mnras/stad913"
 
 [tool.setuptools]
+# The repository root is the package itself (__init__.py, core.py, ... at the top level).
 packages = ["artefact"]
+package-dir = { "artefact" = "." }
+
+[tool.setuptools.package-data]
+"artefact" = ["data/filters.yaml", 
+              "data/filters/*.csv",
+              "data/optical_constants/astrosil.lnk",
+              "data/stellar_models/*"]
 
 [tool.setuptools.dynamic]
 # Read statically from the source, so building does not import numba/astropy.
-version = { attr = "artefact.core.__version__" }
+version = { attr = "artefact.__version__" }
 
 # ---------------------------------------------------------------------------
 # Tests: `pip install -e ".[test]"` then `pytest`
@@ -69,7 +78,7 @@ version = { attr = "artefact.core.__version__" }
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-pythonpath = ["."]  # lets `import artefact` work without installing
+# The package is the repository root, so it must be installed (`pip install -e .`) to be imported.
 addopts = "-ra"
 filterwarnings = [
     "error::SyntaxWarning:artefact",  # e.g. invalid escape sequences, `is` with a literal
@@ -100,5 +109,4 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # The BibTeX entry in __citation__ contains very long lines; consider moving it
 # to a CITATION.cff file and dropping this exception.
-"artefact.py" = ["E501"]
 "tests/*" = ["E501"]

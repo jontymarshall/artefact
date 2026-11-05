@@ -37,7 +37,7 @@ def fake_mie(m, x):
 @pytest.fixture
 def disc(monkeypatch):
     """A model with thermal emission and scattered light, still in F_lambda."""
-    monkeypatch.setattr(art.mpy, "mie", fake_mie)
+    monkeypatch.setattr(art.core, "mie_efficiencies", fake_mie)
     model = RTModel()
     model.parameters.update(PARAMS)
     model.make_star()

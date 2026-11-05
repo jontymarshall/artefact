@@ -54,10 +54,11 @@ from .core import (
     disc_mass_three_slope,
     # physical constants (SI) and unit conversions
     AU,
-    ARCSEC_PER_DEG,
     C_LIGHT,
     CGS_FLAM_TO_SI,
     G_CM3_TO_KG_M3,
+    FWHM_PER_SIGMA,
+    FWHM_TO_SIGMA,
     H_PLANCK,
     K_B,
     L_SUN,
@@ -88,9 +89,8 @@ from .image import (
     henyey_greenstein,
     two_component_hg,
     # model defaults
+    ARCSEC_PER_DEG,
     ASPECT_RATIO,
-    FWHM_PER_SIGMA,
-    FWHM_TO_SIGMA,
     HG_G1,
     HG_G2,
     HG_WEIGHT,
@@ -118,7 +118,6 @@ from .phoenix import (
     verify_shipped_grid,
     build_grid,
     # model constants
-    SIGMA_SB,
     L_SUN_W,
     R_SUN_M,
     PARSEC_M,

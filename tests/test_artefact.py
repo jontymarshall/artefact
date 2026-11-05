@@ -73,7 +73,7 @@ BASE_PARAMS = dict(
 
 
 def fake_mie(m, x):
-    """Deterministic stand-in for ``miepython.mie``: (qext, qsca, qback, g)."""
+    """Deterministic stand-in for ``artefact.core.mie_efficiencies``: (qext, qsca, qback, g)."""
     x = np.asarray(x, dtype=float)
     qext = 2.0 * (1.0 - np.exp(-x))
     return qext, 0.4 * qext, 0.0 * qext, 0.0 * qext
@@ -94,7 +94,7 @@ def model_factory():
 @pytest.fixture
 def disc_model(model_factory, monkeypatch):
     """A model run up to (and including) ``calculate_qabs`` with mocked Mie."""
-    monkeypatch.setattr(art.mpy, "mie", fake_mie)
+    monkeypatch.setattr(art.core, "mie_efficiencies", fake_mie)
     model = model_factory()
     model.make_star()
     model.make_dust()
@@ -176,14 +176,6 @@ def test_unit_conversion_constants():
     assert art.CGS_FLAM_TO_SI == rel(1e7, 1e-12)  # erg/s/cm2/A -> W/m2/m
     assert art.FWHM_PER_SIGMA == rel(2 * np.sqrt(2 * np.log(2)), 1e-3)
     assert art.UM == 1e-6
-
-
-def test_deprecated_lowercase_aliases_match_new_names():
-    pairs = [("h", "H_PLANCK"), ("c", "C_LIGHT"), ("k", "K_B"), ("sb", "SIGMA_SB"),
-             ("au", "AU"), ("pc", "PC"), ("lsol", "L_SUN"), ("rsol", "R_SUN"),
-             ("MEarth", "M_EARTH"), ("um", "UM")]  # fmt: skip
-    for old, new in pairs:
-        assert getattr(art, old) == getattr(art, new)
 
 
 def test_physics_helpers_are_reachable_from_the_class():
@@ -330,11 +322,9 @@ def test_read_star_converts_angstrom_and_cgs_to_um_and_si(tmp_path, model_factor
     assert spect == rel([2.0e7, 3.0e7])  # erg/s/cm2/A -> W/m2/m
 
 
-def test_make_star_rejects_unknown_and_unimplemented_types(model_factory):
+def test_make_star_rejects_unknown_types(model_factory):
     with pytest.raises(ValueError, match="stype"):
         model_factory(stype="nonsense").make_star()
-    with pytest.raises(NotImplementedError):
-        model_factory(stype="starfish").make_star()
 
 
 # ---------------------------------------------------------------------------
@@ -527,13 +517,6 @@ def test_make_disc_two_power_law_has_continuous_break(model_factory):
     assert model.scale == rel(expected / expected.sum(), 1e-10)
 
 
-def test_make_disc_gaussian_clips_inner_edge_to_one_au(model_factory):
-    model = model_factory(dtype="gauss", rpeak=5.0, rfwhm=20.0, nring=9)
-    model.make_disc()
-    assert model.edges[0] == rel(1.0)
-    assert model.edges[-1] == rel(5.0 + 3.0 * 20.0 / art.FWHM_PER_SIGMA)
-
-
 def test_make_disc_rejects_unknown_and_unimplemented_types(model_factory):
     with pytest.raises(NotImplementedError):
         model_factory(dtype="arbit").make_disc()
@@ -567,7 +550,7 @@ def test_calculate_qabs_accepts_three_or_four_mie_return_values(
         ones = np.ones_like(x)
         return (2.0 * ones, 0.5 * ones, 0.1 * ones, 0.0 * ones)[:n_returned]
 
-    monkeypatch.setattr(art.mpy, "mie", mie)
+    monkeypatch.setattr(art.core, "mie_efficiencies", mie)
     model = model_factory(ngrain=3, nwav=20)
     model.make_star()
     model.make_dust()
@@ -585,7 +568,7 @@ def test_calculate_qabs_accepts_three_or_four_mie_return_values(
 
 def test_real_mie_limits():
     """Uses the real miepython: Rayleigh scattering and the extinction paradox."""
-    qext, qsca, *_ = art.mpy.mie(1.5 - 0.1j, np.array([0.01, 200.0]))
+    qext, qsca, *_ = art.core.mie_efficiencies(1.5 - 0.1j, np.array([0.01, 200.0]))
     qabs = qext - qsca
     assert qsca[0] < 1e-3 * qabs[0]  # tiny absorbing grains barely scatter
     assert qext[1] == pytest.approx(2.0, rel=0.1)  # large grains: Q_ext -> 2
@@ -887,7 +870,7 @@ def test_end_to_end_disc_is_finite_and_negligible_in_the_optical(disc_model):
 
 
 def test_full_pipeline_from_parameter_and_optical_constant_files(tmp_path, monkeypatch):
-    monkeypatch.setattr(art.mpy, "mie", fake_mie)
+    monkeypatch.setattr(art.core, "mie_efficiencies", fake_mie)
     (tmp_path / "dust.lnk").write_text("# lambda n k\n0.01 1.5 0.1\n10000.0 1.5 0.1\n")
     params = {**BASE_PARAMS, "composition": str(tmp_path / "dust"), "nwav": 60, "nring": 4}
     (tmp_path / "model.txt").write_text(

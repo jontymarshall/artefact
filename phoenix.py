@@ -17,13 +17,16 @@ from pathlib import Path
 import numpy as np
 from lmfit import Parameters, minimize
 
+from .fitting import Photometer
+
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-PHOENIX_DIR = . / "data" / "stellar_models" / "phoenix"
-CACHE_PATH = . / "data" / "stellar_models" / "phoenix_grid.npz"
-SHIPPED_PATH = . / "data" / "stellar_models" / "phoenix_grid.npz"  # the committed copy of the cache
-SHIPPED_CHECKSUM_PATH = . / "data" / "stellar_models" / "phoenix_grid.sha256"
+MODEL_DIR = Path(__file__).resolve().parent / "data" / "stellar_models"
+PHOENIX_DIR = MODEL_DIR / "phoenix"  # the full PHOENIX model files, only needed to rebuild the grid
+# a grid rebuilt from the model files; kept apart from the committed copy so that copy is always checksummed
+CACHE_PATH = MODEL_DIR / "phoenix_grid_cache.npz"
+SHIPPED_PATH = MODEL_DIR / "phoenix_grid.npz"  # the committed copy of the grid
+SHIPPED_CHECKSUM_PATH = MODEL_DIR / "phoenix_grid.sha256"
 WAVE_FILE = "WAVE_PHOENIX-ACES-AGSS-COND-2011.fits"
 METALLICITY_FOLDERS = {-0.5: "Z-0.5", 0.0: "Z-0.0", 0.5: "Z+0.5"}
 BIN_EDGES_UM = np.logspace(np.log10(0.05), np.log10(5.4), 1201)  # 1200 bins
