@@ -430,8 +430,16 @@ class RTModel:
                     photosphere * MJY_PER_SI * ((rstar * R_SUN) / (dstar * PC)) ** 2
                 )
 
-            case "starfish":
-                raise NotImplementedError("Not yet implemented.")
+            case "phoenix":
+                lambdas, photosphere = self.fit_phoenix()
+
+                if np.max(wavelengths) > np.max(lambdas):
+                    lambdas, photosphere = extrapolate_wavelengths(
+                        lambdas, wavelengths, photosphere, nwav=100
+                    )
+
+                photosphere = np.interp(wavelengths, lambdas, photosphere)
+                photosphere *= MJY_PER_SI
 
             case _:
                 raise ValueError(
@@ -492,6 +500,53 @@ class RTModel:
 
         model_waves *= 1e-4  # Angstrom -> um
         model_spect *= CGS_FLAM_TO_SI  # W/m2/m
+
+        return model_waves, model_spect
+
+
+    def fit_phoenix(self,lmin=SCALE_WAVE_MIN,lmax=SCALE_WAVE_MAX)
+        """
+        Fit a stellar photosphere model from a pre-compiled PHOENIX grid file.
+
+        PHOENIX models have wavelengths in microns and flux density in Jy.
+
+        Returns
+        -------
+        model_waves : float array
+            Wavelengths in microns in ascending order.
+        model_spect : float array
+            Photospheric flux density in W/m2/m in ascending order.
+
+        """
+
+        phoenix_photometry = Photometer()
+        phoenix_photometry.wave_um = self.obs_wave
+        phoenix_photometry.flux_jy = self.obs_flux*1e3
+        phoenix_photometry.err_jy  = self.obs_uncs*1e3
+
+        phoenix_grid = load_grid()
+
+        stellarfit = fit_star(phoenix_photometry,
+                                self.parameters["dstar"],
+                                phoenix_grid,
+                                teff_start = 6000.0,
+                                logg = 4.5,
+                                mh = 0.0,
+                                fit_surface = True,
+                              )
+
+        model_spect = stellarfit.model_for(stellarfit.params,model_waves)
+
+        #write parameters into model object.
+        self.parameters["lstar"] = stellarfit.luminosity_lsun
+        self.parameters["tstar"] = stellarfit.teff
+        self.parameters["rstar"] = stellarfit.radius_rsun
+        self.parameters["logg"]  = stellarfit.logg
+        self.parameters["feh"]   = stellarfit.feh
+        self.stellarfit          = stellarfit #for uncertainties
+
+        # Jy -> W/m2/m
+        model_spect *= 1e-26 * C_LIGHT / (model_waves * UM) ** 2  # W/m2/m
 
         return model_waves, model_spect
 

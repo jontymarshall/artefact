@@ -1,0 +1,78 @@
+# Which filter curve (config/filters/) goes with each photometry band name in the database.
+#
+#   filter       the filter's name in the library: an SVO identifier, or one built by scripts/fetch_filters.py
+#                (ALMA/..., Spitzer/IRS.13, Spitzer/IRS.31)
+#   index        the catalog's reference spectrum: F_nu proportional to nu^-index (0 = flat in F_nu, the default;
+#                1 for IRAS, AKARI, IRAC, PACS and SPIRE; 2 for WISE). A catalog flux is the flux density of that
+#                spectrum at the band's reference wavelength that gives the observed signal.
+#   blackbody_k  instead of `index`: the reference spectrum is a blackbody of this temperature (MIPS: 10000)
+#   reference_um the wavelength the reference spectrum is normalised at (default: the filter's own)
+#
+# Fluxes already colour corrected (taken from papers) are compared with the model at the reference wavelength;
+# only bands with a flat reference spectrum (index 0) are band-integrated whatever their source, because for
+# them the integral is the natural comparison. Bands without a filter are fitted at their wavelength, as before,
+# and reported as missing.
+bands:
+  Gaia.BP: {filter: GAIA/GAIA3.Gbp}
+  Gaia.G: {filter: GAIA/GAIA3.G}
+  Gaia.RP: {filter: GAIA/GAIA3.Grp}
+  Johnson.B: {filter: Generic/Johnson.B}
+  Johnson.V: {filter: Generic/Johnson.V}
+  Stromgren.u: {filter: Generic/Stromgren.u}
+  Stromgren.b: {filter: Generic/Stromgren.b}
+  Stromgren.v: {filter: Generic/Stromgren.v}
+  Stromgren.y: {filter: Generic/Stromgren.y}
+  PS1.g: {filter: PAN-STARRS/PS1.g}
+  PS1.r: {filter: PAN-STARRS/PS1.r}
+  PS1.i: {filter: PAN-STARRS/PS1.i}
+  PS1.z: {filter: PAN-STARRS/PS1.z}
+  PS1.y: {filter: PAN-STARRS/PS1.y}
+  2MASS.J: {filter: 2MASS/2MASS.J}
+  2MASS.H: {filter: 2MASS/2MASS.H}
+  2MASS.Ks: {filter: 2MASS/2MASS.Ks}
+  WISE.W1: {filter: WISE/WISE.W1, index: 2}
+  WISE.W2: {filter: WISE/WISE.W2, index: 2}
+  WISE.W3: {filter: WISE/WISE.W3, index: 2}
+  WISE.W4: {filter: WISE/WISE.W4, index: 2}
+  IRAC.3.6: {filter: Spitzer/IRAC.I1, index: 1}
+  IRAC.4.5: {filter: Spitzer/IRAC.I2, index: 1}
+  IRAC.5.8: {filter: Spitzer/IRAC.I3, index: 1}
+  IRAC.8.0: {filter: Spitzer/IRAC.I4, index: 1}
+  AKARI.S9W: {filter: AKARI/IRC.S9W, index: 1}
+  AKARI.L18W: {filter: AKARI/IRC.L18W, index: 1}
+  IRAS.12: {filter: IRAS/IRAS.12mu, index: 1}
+  IRAS.25: {filter: IRAS/IRAS.25mu, index: 1}
+  IRAS.60: {filter: IRAS/IRAS.60mu, index: 1}
+  IRAS.100: {filter: IRAS/IRAS.100mu, index: 1}
+  Spitzer.MIPS24: {filter: Spitzer/MIPS.24mu, blackbody_k: 10000}
+  Spitzer.MIPS70: {filter: Spitzer/MIPS.70mu, blackbody_k: 10000}
+  MIPS.24um: {filter: Spitzer/MIPS.24mu, blackbody_k: 10000}
+  MIPS.70um: {filter: Spitzer/MIPS.70mu, blackbody_k: 10000}
+  # the Chen et al. (2014) IRS fluxes are averages over 8.5-13 and 30-34 micron (Beichman et al. 2006)
+  Spitzer.IRS13: {filter: Spitzer/IRS.13}
+  Spitzer.IRS31: {filter: Spitzer/IRS.31}
+  PACS.70: {filter: Herschel/Pacs.blue, index: 1}
+  PACS.100: {filter: Herschel/Pacs.green, index: 1}
+  PACS.160: {filter: Herschel/Pacs.red, index: 1}
+  PACS.70um: {filter: Herschel/Pacs.blue, index: 1}
+  PACS.100um: {filter: Herschel/Pacs.green, index: 1}
+  PACS.160um: {filter: Herschel/Pacs.red, index: 1}
+  SPIRE.250: {filter: Herschel/SPIRE.PSW, index: 1}
+  SPIRE.350: {filter: Herschel/SPIRE.PMW, index: 1}
+  SPIRE.500: {filter: Herschel/SPIRE.PLW, index: 1}
+  SPIRE.249um: {filter: Herschel/SPIRE.PSW, index: 1}
+  SPIRE.350um: {filter: Herschel/SPIRE.PMW, index: 1}
+  SPIRE.504um: {filter: Herschel/SPIRE.PLW, index: 1}
+  SCUBA-2.450um: {filter: JCMT/SCUBA2.450GHz}
+  ALMA.B7.856um: {filter: ALMA/ALMA.B7}  # Band 7 at the standard continuum windows (Lovell et al. 2021)
+  SCUBA-2.850um: {filter: JCMT/SCUBA2.850GHz}
+
+# bands that are a flat flux density at one wavelength need no filter: they are compared with the model at that
+# wavelength and are never reported as missing (`monochromatic: true` instead of `filter`)
+# band names matched as a pattern (a regular expression for the whole name), after the exact names above
+patterns:
+  # the REASONS belt flux at each target's own wavelength, all from the one Band 6 correlator setup
+  - {match: '^ALMA\.[0-9.]+mm$', filter: ALMA/ALMA.B6.REASONS}
+  # the binned Spitzer IRS spectrum (stardb.ingest.irs) and centimetre flux densities (ATCA, VLA)
+  - {match: '^IRS\.[0-9.]+um$', monochromatic: true}
+  - {match: '^(ATCA|VLA)\.[0-9.]+um$', monochromatic: true}

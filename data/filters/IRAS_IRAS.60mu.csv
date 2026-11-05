@@ -1,0 +1,26 @@
+# name: IRAS/IRAS.60mu
+# detector: energy
+# reference_um: 58.1904
+# source: SVO filter profile service http://svo2.cab.inta-csic.es/theory/fps/fps.php?ID=IRAS/IRAS.60mu, downloaded 2026-11-02
+wavelength_um,transmission
+27,0
+30,0.01
+33,0.036
+36,0.068
+39,0.174
+42,0.315
+45,0.483
+48,0.585
+51,0.658
+54,0.716
+57,0.824
+60,0.915
+63,0.987
+66,0.99
+69,1
+72,0.946
+75,0.713
+78,0.531
+81,0.174
+84,0.047
+87,0

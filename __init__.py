@@ -98,6 +98,52 @@ from .image import (
     MIN_INC,
 )
 
+
+from .fitting import (
+    Photometer,
+    BandResponse,
+    FilterCurve,
+    band_weights,
+    read_filter,
+)
+
+
+from .phoenix import (
+    PhoenixGrid,
+    Quantity,
+    StellarFit,
+    # grid functions
+    load_grid,
+    save_grid,
+    verify_shipped_grid,
+    build_grid,
+    # model constants
+    SIGMA_SB,
+    L_SUN_W,
+    R_SUN_M,
+    PARSEC_M,
+    # model defaults
+    NO_EXTINCTION_WITHIN_PC,
+    RV,
+    STELLAR_MIN_UM,
+    STELLAR_MAX_UM,
+    MIN_STELLAR_POINTS,
+    MISSING_ERROR_FRACTION,
+    ERROR_FLOOR,
+    SAMPLES,
+    LOGG_PRIOR,
+    FEH_PRIOR,
+    # star functions
+    extinction_av,
+    sample_covariance,
+    effective_errors,
+    percentile_errors,
+    stellar_luminosity_lsun,
+    fit_star,
+    main_sequence_mass,
+)
+
+
 # public API
 __all__ = [
     "ModelImage",

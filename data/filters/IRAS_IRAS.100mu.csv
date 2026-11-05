@@ -1,0 +1,22 @@
+# name: IRAS/IRAS.100mu
+# detector: energy
+# reference_um: 99.5378
+# source: SVO filter profile service http://svo2.cab.inta-csic.es/theory/fps/fps.php?ID=IRAS/IRAS.100mu, downloaded 2026-11-02
+wavelength_um,transmission
+65,0
+70,0.01
+75,0.113
+80,0.306
+85,0.505
+90,0.695
+95,0.824
+100,0.947
+105,0.939
+110,1
+115,0.631
+120,0.319
+125,0.195
+130,0.106
+135,0.053
+140,0.01
+145,0
