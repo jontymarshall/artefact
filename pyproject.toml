@@ -56,11 +56,11 @@ Issues = "https://github.com/jontymarshall/artefact/issues"
 Paper = "https://doi.org/10.1093/mnras/stad913"
 
 [tool.setuptools]
-py-modules = ["artefact"]
+packages = ["artefact"]
 
 [tool.setuptools.dynamic]
 # Read statically from the source, so building does not import numba/astropy.
-version = { attr = "artefact.__version__" }
+version = { attr = "artefact.core.__version__" }
 
 # ---------------------------------------------------------------------------
 # Tests: `pip install -e ".[test]"` then `pytest`
