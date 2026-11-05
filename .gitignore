@@ -2,3 +2,4 @@
 .DS_Store
 #Python
 __pycache__
+artefact.egg-info

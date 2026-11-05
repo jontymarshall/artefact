@@ -414,6 +414,8 @@ class RTModel:
 
         """
 
+        self._in_fnu = False #reset _in_fnu flag
+
         # rstar and tstar are outputs of the "phoenix" fit, so they need not be given for it
         rstar = self.parameters.get("rstar")
         tstar = self.parameters.get("tstar")
@@ -608,6 +610,10 @@ class RTModel:
              photosphere model.
 
         """
+
+        if self._in_fnu:
+            print("Star is already in Fnu units, scaling requires Flam units.")
+            return        
 
         # Observations and stellar photosphere model
         fobs = np.asarray(self.obs_flux)
