@@ -6,7 +6,7 @@ star in the optically thin limit, for several radial surface density
 distributions and a power-law grain size distribution.
 """
 
-__version__ = "0.0.7"
+__version__ = "0.0.6"
 __author__ = "Jonathan P. Marshall"
 __email__ = ""
 __copyright__ = "2023-26, Jonathan P. Marshall"
@@ -31,6 +31,8 @@ __citation__ = r"""@ARTICLE{2023MNRAS.521.5940M,
 }"""
 
 import json
+import warnings
+from dataclasses import dataclass
 
 import astropy.constants as const
 import miepython as mpy
@@ -61,6 +63,23 @@ T_CMB = 2.73  # K, lower bound of the dust temperature search
 T_BB_1AU = 278.0  # K, blackbody temperature at 1 au from a 1 L_sun star
 SCALE_WAVE_MIN = 0.44  # um, lower limit of photometry used by scale_star
 SCALE_WAVE_MAX = 5.0  # um, upper limit of photometry used by scale_star
+
+# Three-slope size distribution of Krivov & Wyatt (2021, MNRAS 500, 718), sizes in um
+S_MM = 1e3  # 1 mm, upper size of the "dust" that the sub-mm flux measures
+S_KM = 1e9  # 1 km, transition from the collisional cascade to primordial slope
+S_MAX = 2e11  # 200 km, largest planetesimal
+Q_MED = 3.7  # slope of the collisional cascade, s_mm < s < s_km
+Q_BIG = 2.8  # slope of the primordial planetesimals, s_km < s < s_max
+
+# Defaults for model images
+ASPECT_RATIO = 0.03  # scale height over radius, H / r
+HG_G1 = 0.7  # forward-scattering asymmetry parameter of the first component
+HG_G2 = -0.2  # backward-scattering asymmetry parameter of the second component
+HG_WEIGHT = 0.7  # weight of the first component (the second has 1 - weight)
+# Limits that keep the line-of-sight integral well conditioned: the depth z is
+# divided by sin(i), and a razor-thin disc has a vertical width of aspect * r.
+MIN_INC = 1e-4  # radians; face-on images are exact to about 5e-9
+MIN_ASPECT = 1e-3
 
 # Deprecated lowercase aliases, retained for backwards compatibility only.
 h, c, k, sb = H_PLANCK, C_LIGHT, K_B, SIGMA_SB
@@ -114,16 +133,16 @@ def extrapolate_wavelengths(lambdas, wavelengths, photospheres, nwav=100):
     """
     Extrapolate stellar photosphere model using Rayleigh-Jeans approximation
     if longest wavelength of stellar model is smaller than the longest
-    wavelength of requested model grid.
+    wavelength of observations.
 
     Parameters
     ----------
     lambdas : ndarray
-        Wavelengths of supplied stellar model.
+        Wavelengths of supplied model grid.
     wavelengths : ndarray
-        Wavelengths of model grid.
+        Wavelengths of observations.
     photospheres : ndarray
-        Flux of supplied stellar photosphere model.
+        Stellar photosphere model.
 
     Returns
     -------
@@ -144,63 +163,29 @@ def extrapolate_wavelengths(lambdas, wavelengths, photospheres, nwav=100):
     return lambda_ext, photosphere_ext
 
 
-def ring_grid(rmin, rmax, nring):
-    """
-    Divide [rmin, rmax] into nring equal-width annuli.
-
-    Parameters
-    ----------
-    rmin, rmax : float
-        Inner and outer edge of the disc in au.
-    nring : int
-        Number of annuli.
-
-    Returns
-    -------
-    edges : float array
-        The nring + 1 annulus boundaries in au.
-    radii : float array
-        The nring annulus mid-points in au, where the surface density is
-        evaluated and the dust temperature is calculated.
-
-    """
-    edges = np.linspace(rmin, rmax, num=nring + 1)
-    return edges, 0.5 * (edges[:-1] + edges[1:])
-
-@njit
-def calc_luminosity(rstar, tstar):
-    """
-    Calculate the luminosity of the source.
-
-    Parameters
-    ----------
-    rstar : float
-        Radius of the star in R_sol.
-    tstar : float
-        Temperature of the star in Kelvin.
-
-    Returns
-    -------
-    lphot : float
-        L_star in L_solar
-    """
-    lphot = (4.0 * np.pi * SIGMA_SB * (rstar * R_SUN) ** 2 * tstar**4) / L_SUN
-    return lphot
-
 def _size_integral(s0, s1, exponent):
-    """
-    Integral of s**(exponent - 1) ds from s0 to s1, 
-    i.e. (s1^e - s0^e) / e.
-    """
+    """Integral of s**(exponent - 1) ds from s0 to s1, i.e. (s1^e - s0^e) / e."""
     if abs(exponent) < 1e-12:
         return np.log(s1 / s0)
     return (s1**exponent - s0**exponent) / exponent
 
-def disc_mass_three_slope(mdust,q,amin,amax,smm=S_MM,skm=S_KM,smax=S_MAX,
-    q_med=Q_MED,q_big=Q_BIG,rho_ratio=1.0,exact=False):
+
+def disc_mass_three_slope(
+    mdust,
+    q,
+    amin,
+    amax,
+    smm=S_MM,
+    skm=S_KM,
+    smax=S_MAX,
+    q_med=Q_MED,
+    q_big=Q_BIG,
+    rho_ratio=1.0,
+    exact=False,
+):
     """
-    Calculate total disc mass from the dust mass, for the three-slope size 
-    distribution of Krivov & Wyatt (2021, MNRAS 500, 718).
+    Total disc mass from the dust mass, for the three-slope size distribution of
+    Krivov & Wyatt (2021, MNRAS 500, 718; arXiv:2008.07406, Sect. 2.4).
 
     The size distribution n(s) ~ s**-q has slope q for dust (s < smm), q_med for
     the collisional cascade (smm < s < skm) and q_big for primordial planetesimals
@@ -239,8 +224,10 @@ def disc_mass_three_slope(mdust,q,amin,amax,smm=S_MM,skm=S_KM,smax=S_MAX,
         raise ValueError(f"q must be negative (dN/da ~ a**q), got {q!r}.")
     qd = -q
     if not amin < smm < skm < smax:
-        raise ValueError("Sizes must satisfy amin < smm < skm < smax, got "
-            f"{amin!r}, {smm!r}, {skm!r}, {smax!r}.")
+        raise ValueError(
+            "Sizes must satisfy amin < smm < skm < smax, got "
+            f"{amin!r}, {smm!r}, {skm!r}, {smax!r}."
+        )
     if max(qd, q_med, q_big) >= 4.0:
         raise ValueError("All slopes must be below 4 for the mass to be finite.")
     if amax <= amin:
@@ -254,7 +241,9 @@ def disc_mass_three_slope(mdust,q,amin,amax,smm=S_MM,skm=S_KM,smax=S_MAX,
     )
 
     if not exact:  # Eq. 9
-        factor = ((4.0 - qd) / (4.0 - q_big)
+        factor = (
+            (4.0 - qd)
+            / (4.0 - q_big)
             * (skm / smm) ** (4.0 - q_med)
             * (smax / skm) ** (4.0 - q_big)
         )
@@ -268,13 +257,316 @@ def disc_mass_three_slope(mdust,q,amin,amax,smm=S_MM,skm=S_KM,smax=S_MAX,
         * skm ** (q_big - q_med)
         * _size_integral(skm, smax, 4.0 - q_big)
     )
-
     return mass_d * (i_dust + i_med + rho_ratio * i_big) / i_dust
 
 
-class RTModel:
+FWHM_TO_SIGMA = 1.0 / np.sqrt(8.0 * np.log(2.0))  # sigma = FWHM * FWHM_TO_SIGMA
+ARCSEC_PER_DEG = 3600.0
+
+
+def convolve_beam(image, beam):
     """
-    Optically thin radiative transfer model of a dusty circumstellar disc.
+    Convolve a flux image (flux per pixel) with a beam, conserving total flux.
+
+    Parameters
+    ----------
+    image : 2D float array
+        Image in flux per pixel.
+    beam : float, 2D float array or kernel object
+        A float is the FWHM of a circular Gaussian beam in pixels. An array is a
+        point-spread function sampled on the same pixels. An object with a 2D
+        ``array`` attribute, such as an astropy ``Kernel2D``, is used through that
+        array, so ``Gaussian2DKernel(x_stddev, y_stddev, theta)`` gives an
+        elliptical beam at any position angle. A PSF must have odd dimensions so
+        that its peak is on the central pixel, and is normalised to unit sum.
+
+    Returns
+    -------
+    convolved : 2D float array
+        Image in flux per pixel, with the same shape as ``image``.
+
+    """
+    from scipy.ndimage import gaussian_filter
+    from scipy.signal import fftconvolve
+
+    if hasattr(beam, "array"):
+        beam = beam.array
+
+    if np.ndim(beam) == 0:
+        if beam <= 0:
+            raise ValueError(f"Beam FWHM must be positive, got {beam!r}.")
+        return gaussian_filter(
+            image, sigma=beam * FWHM_TO_SIGMA, mode="constant", cval=0.0
+        )
+
+    psf = np.asarray(beam, dtype=float)
+    if psf.ndim != 2 or np.sum(psf) <= 0:
+        raise ValueError("A PSF must be a 2D array with a positive sum.")
+    if psf.shape[0] % 2 == 0 or psf.shape[1] % 2 == 0:
+        raise ValueError(f"A PSF must have odd dimensions, got {psf.shape}.")
+    return fftconvolve(image, psf / np.sum(psf), mode="same")
+
+
+def henyey_greenstein(cos_theta, g):
+    """
+    Henyey-Greenstein phase function, normalised to 1 over the sphere.
+
+    Parameters
+    ----------
+    cos_theta : float or float array
+        Cosine of the scattering angle (1 is forward scattering).
+    g : float
+        Asymmetry parameter, between -1 (backward) and 1 (forward).
+
+    Returns
+    -------
+    phase : float or float array
+        p(theta) in 1/sr, so that the integral of p over 4 pi sr is 1. An isotropic
+        scatterer has 1 / (4 pi).
+
+    """
+    if not -1.0 < g < 1.0:
+        raise ValueError(f"The asymmetry parameter must be in (-1, 1), got {g!r}.")
+    return (1.0 - g**2) / (4.0 * np.pi * (1.0 + g**2 - 2.0 * g * cos_theta) ** 1.5)
+
+
+def two_component_hg(cos_theta, g1=HG_G1, g2=HG_G2, weight=HG_WEIGHT):
+    """
+    Two-component Henyey-Greenstein phase function, normalised to 1 over the sphere.
+
+    The sum of a forward-peaked component (``g1``) with weight ``weight`` and a
+    backward component (``g2``) with weight ``1 - weight``; see
+    ``henyey_greenstein``.
+
+    """
+    if not 0.0 <= weight <= 1.0:
+        raise ValueError(f"The component weight must be in [0, 1], got {weight!r}.")
+    return weight * henyey_greenstein(cos_theta, g1) + (1.0 - weight) * (
+        henyey_greenstein(cos_theta, g2)
+    )
+
+
+def disc_surface_brightness(
+    p, q, edges, flux_emit, flux_scat, inc, aspect, phase=None, nlos=48, chunk=40000
+):
+    """
+    Flux per unit sky area of a vertically thick, optically thin disc.
+
+    The dust of each annulus has a Gaussian vertical profile with standard
+    deviation H = aspect * r. A point (x, y, z) of the disc (x along the major axis,
+    y across it in the plane, z vertical) projects onto the sky at
+    (p, q) = (x, y cos i + z sin i) and lies s = z cos i - y sin i towards the
+    observer. The flux at (p, q) is the integral along the line of sight of the
+    emissivity, which is the face-on flux per unit disc area of the annulus times
+    the vertical profile. The integral is done over y, within the extent where the
+    profile is non-negligible (6 sigma) and the disc exists, with the midpoint rule.
+
+    Scattered light is weighted by 4 pi p(theta), where theta is the angle between
+    the direction of the starlight at the grain (away from the star) and the
+    direction to the observer, cos(theta) = s / sqrt(x^2 + y^2 + z^2). The side of the
+    disc with q < 0 is the near side.
+
+    Parameters
+    ----------
+    p, q : 1D float arrays
+        Sky offsets along and across the major axis, in au.
+    edges : float array
+        Annulus boundaries in au.
+    flux_emit, flux_scat : float arrays
+        Face-on thermal and scattered flux per unit disc area of each annulus,
+        in mJy / au^2.
+    inc : float
+        Inclination in radians, greater than zero.
+    aspect : float
+        Scale height over radius, greater than zero.
+    phase : callable or None
+        Phase function p(cos theta) in 1/sr, or None for isotropic scattering.
+    nlos : int
+        Number of line-of-sight samples per pixel.
+    chunk : int
+        Number of pixels processed at once, to limit memory.
+
+    Returns
+    -------
+    brightness : 1D float array
+        Flux per unit sky area in mJy / au^2, with the shape of ``p``.
+
+    """
+    cos_i, sin_i = np.cos(inc), np.sin(inc)
+    nring = len(flux_emit)
+    rin, rout = edges[0], edges[-1]
+
+    # Extent of the integral over y: the chord of the disc at each p, limited to
+    # 6 sigma around the point where the line of sight crosses the mid-plane.
+    chord = np.sqrt(np.clip(rout**2 - p**2, 0.0, None))
+    y_mid = q / cos_i
+    r_ref = np.clip(np.hypot(p, y_mid), rin, rout)
+    half = 6.0 * aspect * r_ref * sin_i / cos_i
+    lower = np.maximum(y_mid - half, -chord)
+    upper = np.minimum(y_mid + half, chord)
+
+    brightness = np.zeros_like(p, dtype=float)
+    todo = np.flatnonzero((chord > 0.0) & (upper > lower))
+    fraction = (np.arange(nlos) + 0.5) / nlos
+
+    for start in range(0, len(todo), chunk):
+        sel = todo[start : start + chunk]
+        ps, qs = p[sel, None], q[sel, None]
+        width = (upper[sel] - lower[sel])[:, None]
+        y = lower[sel, None] + width * fraction
+
+        r = np.hypot(ps, y)
+        ring = np.searchsorted(edges, r, side="right") - 1
+        inside = (ring >= 0) & (ring < nring)
+        ring = np.clip(ring, 0, nring - 1)
+
+        z = (qs - y * cos_i) / sin_i
+        height = np.maximum(aspect * r, 1e-12)
+        vertical = np.exp(-0.5 * (z / height) ** 2) / (np.sqrt(2.0 * np.pi) * height)
+
+        scattered = flux_scat[ring]
+        if phase is not None:
+            towards_observer = (qs * cos_i - y) / sin_i
+            cos_theta = towards_observer / np.maximum(np.hypot(r, z), 1e-12)
+            scattered = scattered * 4.0 * np.pi * phase(cos_theta)
+
+        line = np.where(inside, (flux_emit[ring] + scattered) * vertical, 0.0)
+        brightness[sel] = line.sum(axis=1) * (width[:, 0] / nlos) / sin_i
+
+    return brightness
+
+
+@dataclass
+class ModelImage:
+    """
+    A model image of the disc on a regular sky grid.
+
+    ``data[row, column]`` has north increasing with the row and east decreasing with
+    the column, so ``imshow(data, origin="lower")`` shows north up and east left.
+    The star is at the centre of the array.
+
+    Attributes
+    ----------
+    data : 2D float array
+        Image in the unit given by ``unit``.
+    pixscale : float
+        Pixel size in arcsec.
+    wavelength : float
+        Wavelength in um.
+    unit : str
+        "mJy/pixel", "mJy/arcsec2" or "mJy/beam".
+    component : str
+        "emit", "scat" or "total".
+    inc, pa : float
+        Inclination and position angle of the disc in degrees.
+    beam : float, 2D array, kernel object or None
+        Beam FWHM in arcsec (or the PSF array or kernel) that the image was
+        convolved with.
+    aspect : float or None
+        Scale height over radius that the image was made with.
+    phase : tuple or None
+        (g1, g2, weight) of the phase function applied to the scattered light, or
+        None if the scattering was isotropic or there was none.
+
+    """
+
+    data: np.ndarray
+    pixscale: float
+    wavelength: float
+    unit: str
+    component: str
+    inc: float
+    pa: float
+    beam: object = None
+    aspect: float = None
+    phase: tuple = None
+
+    def header(self):
+        """Return FITS header cards (a dict) with a tangent-plane offset WCS."""
+        npix_y, npix_x = self.data.shape
+        cards = {
+            "CTYPE1": "RA---TAN",
+            "CTYPE2": "DEC--TAN",
+            "CUNIT1": "deg",
+            "CUNIT2": "deg",
+            "CRVAL1": 0.0,
+            "CRVAL2": 0.0,
+            "CRPIX1": npix_x / 2.0 + 0.5,
+            "CRPIX2": npix_y / 2.0 + 0.5,
+            "CDELT1": -self.pixscale / ARCSEC_PER_DEG,
+            "CDELT2": self.pixscale / ARCSEC_PER_DEG,
+            "BUNIT": self.unit,
+            "WAVELEN": float(self.wavelength),
+            "COMMENT": f"artefact model image, component {self.component}",
+            "INC": float(self.inc),
+            "PA": float(self.pa),
+        }
+        if self.aspect is not None:
+            cards["ASPECT"] = float(self.aspect)
+        if self.phase is not None:
+            cards["HGG1"], cards["HGG2"], cards["HGWEIGHT"] = map(float, self.phase)
+        if isinstance(self.beam, (int, float, np.floating)):
+            cards["BMAJ"] = cards["BMIN"] = self.beam / ARCSEC_PER_DEG
+            cards["BPA"] = 0.0
+        return cards
+
+    def writeto(self, filename, overwrite=True):
+        """Write the image to a FITS file (requires astropy)."""
+        from astropy.io import fits
+
+        hdu = fits.PrimaryHDU(np.asarray(self.data, dtype=np.float32))
+        for key, value in self.header().items():
+            hdu.header[key] = value
+        hdu.writeto(filename, overwrite=overwrite)
+
+
+def ring_grid(rmin, rmax, nring):
+    """
+    Divide [rmin, rmax] into nring equal-width annuli.
+
+    Parameters
+    ----------
+    rmin, rmax : float
+        Inner and outer edge of the disc in au.
+    nring : int
+        Number of annuli.
+
+    Returns
+    -------
+    edges : float array
+        The nring + 1 annulus boundaries in au.
+    radii : float array
+        The nring annulus mid-points in au, where the surface density is
+        evaluated and the dust temperature is calculated.
+
+    """
+    edges = np.linspace(rmin, rmax, num=nring + 1)
+    return edges, 0.5 * (edges[:-1] + edges[1:])
+
+
+@njit
+def calc_luminosity(rstar, tstar):
+    """
+    Calculate the luminosity of the source.
+
+    Parameters
+    ----------
+    rstar : float
+        Radius of the star in R_sol.
+    tstar : float
+        Temperature of the star in Kelvin.
+
+    Returns
+    -------
+    lphot : float
+        L_star in L_solar
+    """
+    lphot = (4.0 * np.pi * SIGMA_SB * (rstar * R_SUN) ** 2 * tstar**4) / L_SUN
+    return lphot
+
+
+class RTModel:
+    """Optically thin radiative transfer model of a dusty circumstellar disc.
 
     Model parameters are read from a plain text file by `get_parameters` and
     stored in the `parameters` dictionary. The methods depend on each other's
@@ -307,6 +599,8 @@ class RTModel:
         Grain extinction, scattering and absorption efficiencies.
     scale, radii, dr, areas, sigma, tdust : ndarray or float
         Radial disc structure, surface number density and dust temperatures.
+    _in_fnu : bool
+        Flag if the conversion from FLAM to FNU has been carried out yet.
     """
 
     # Retained so that RTModel.planck_lam(...) etc. keep working.
@@ -343,10 +637,12 @@ class RTModel:
         # Disc structure
         self.scale = None
         self.radii = None
+        self.edges = None
         self.dr = None
         self.areas = None
         self.sigma = None
         self.tdust = None
+        self.mdisc = None
 
         # Scaling
         self._in_fnu = False
@@ -381,7 +677,7 @@ class RTModel:
 
     def make_star(self):
         """
-        Create a stellar photosphere model Flam in W/m2/m x 1e29 (mJy compatible).
+        Create a stellar photosphere model in FLAM units.
         Sets self.sed_wave and self.sed_star .
 
         """
@@ -414,7 +710,7 @@ class RTModel:
 
                 if np.max(wavelengths) > np.max(lambdas):
                     lambdas, photosphere = extrapolate_wavelengths(
-                        lambdas, wavelengths, photosphere, nwav=nwav
+                        lambdas, wavelengths, photosphere, nwav=100
                     )
 
                 photosphere = np.interp(wavelengths, lambdas, photosphere)
@@ -425,7 +721,7 @@ class RTModel:
 
                 if np.max(wavelengths) > np.max(lambdas):
                     lambdas, photosphere = extrapolate_wavelengths(
-                        lambdas, wavelengths, photosphere, nwav=nwav
+                        lambdas, wavelengths, photosphere, nwav=100
                     )
 
                 photosphere = np.interp(wavelengths, lambdas, photosphere)
@@ -443,7 +739,6 @@ class RTModel:
 
         self.sed_wave = wavelengths
         self.sed_star = photosphere
-        self._in_fnu = False
 
     def read_json(self):
         """
@@ -502,7 +797,7 @@ class RTModel:
     def scale_star(self, lmin=SCALE_WAVE_MIN, lmax=SCALE_WAVE_MAX):
         """
         Scale the photosphere model to the observed photometry within a specified
-        wavelength range. Must be run before flux conversion using flam_to_fnu.
+        wavelength range.
 
         Parameters
         ----------
@@ -511,10 +806,6 @@ class RTModel:
              photosphere model.
 
         """
-
-        if self._in_fnu: 
-            raise RuntimeError("Conversion to Fnu already called for this model."
-                               " Function scale_star expects self.sed_star in Flam.")
 
         # Observations and stellar photosphere model
         fobs = np.asarray(self.obs_flux)
@@ -528,10 +819,8 @@ class RTModel:
         if lobs[mask].min() < self.sed_wave[0] or lobs[mask].max() > self.sed_wave[-1]:
             raise ValueError("Photometry to be fitted lies outside the model grid.")
 
-        model = (
-                np.interp(lobs[mask], self.sed_wave, self.sed_star) 
-                * (lobs[mask] * UM) ** 2 / C_LIGHT
-                )
+        model = (np.interp(lobs[mask], self.sed_wave, self.sed_star)
+                * (lobs[mask] * UM) ** 2 / C_LIGHT)
 
         popt, _ = curve_fit(lambda x, a: a * x, model, fobs[mask], sigma=uobs[mask])
 
@@ -541,6 +830,12 @@ class RTModel:
         """
         Calculate dust grain sizes, numbers, and masses, assuming a power law
         size distribution.
+
+        The parameter ``q`` is the exponent of the differential size
+        distribution, dN/da ~ a**q (Mueller 2007, Eq. 2.9, where q = -eta;
+        a collisional cascade has q = -3.5). Sets self.ag (um), self.ng (number
+        of grains of each size in the whole disc, normalised so that their total
+        mass is ``mdust`` Earth masses) and self.mg (kg per grain).
 
         """
         amin = self.parameters["amin"]
@@ -552,6 +847,9 @@ class RTModel:
 
         grain_sizes = np.geomspace(amin, amax, num=ngrain)
 
+        # The number of grains in a bin is (dN/da) * da. On a logarithmic grid
+        # da is proportional to a, so the count scales as a**(q + 1). The
+        # constant d(ln a) cancels in the mass normalisation below.
         grain_numbers = grain_sizes ** (q + 1.0)
 
         grain_masses = (
@@ -583,7 +881,15 @@ class RTModel:
     def make_disc(self):
         """
         Calculate the radial dust density distribution.
-        Sets self.scale, self.dr, self.radii, and self.areas .
+
+        The disc is split into ``nring`` equal-width annuli that tile the
+        range between the inner and outer edge exactly. The radial profile is
+        the surface number density N(r) of Mueller (2007, Eq. 2.6), evaluated at
+        the annulus mid-points, and the number of grains in an annulus is
+        N(r) times its area (Eq. 2.17).
+
+        Sets self.edges and self.radii (au), self.dr (au), self.areas (m^2) and
+        self.scale (the fraction of all grains in each annulus; sums to one).
 
         """
         valid_types = ["gauss", "onepl", "twopl", "arbit"]
@@ -597,10 +903,13 @@ class RTModel:
                 rfwhm = self.parameters["rfwhm"]
                 nring = int(self.parameters["nring"])
 
-                lower = rpeak - 3.0 * (rfwhm / FWHM_PER_SIGMA)
-                upper = rpeak + 3.0 * (rfwhm / FWHM_PER_SIGMA)
-                if lower < 0.0:
-                    lower = 1.0
+                lower = rpeak - 5.0 * (rfwhm / FWHM_PER_SIGMA)
+                upper = rpeak + 5.0 * (rfwhm / FWHM_PER_SIGMA)
+
+                alow = np.exp(-0.5 * ((lower - rpeak) / (rfwhm / FWHM_PER_SIGMA)) ** 2)
+                if alow > 0.01 and lower <= 1.0:
+                    warnings.warn(f"Warning: Disc amplitude is significant (> 1%) interor to {lower} au.")
+
                 edges, radii = ring_grid(lower, upper, nring)
                 rings = np.exp(-0.5 * ((radii - rpeak) / (rfwhm / FWHM_PER_SIGMA)) ** 2)
 
@@ -643,12 +952,17 @@ class RTModel:
         self.dr = edges[1] - edges[0]
         self.areas = np.pi * (edges[1:] ** 2 - edges[:-1] ** 2) * AU**2  # m^2
 
-        grains_per_ring = rings * self.areas
+        grains_per_ring = rings * self.areas  # N(r) * area, Eq. 2.17
         self.scale = grains_per_ring / np.sum(grains_per_ring)
 
     def calculate_surface_density(self):
         """
-        Calculate radial surface number density of the disc, self.sigma.
+        Calculate the number of grains in each annulus and size bin, self.sigma.
+
+        Despite its name, self.sigma is a dimensionless grain count with shape
+        (nring, ngrain), not a surface density: it is the fraction of the disc in
+        the annulus (self.scale) times the number of grains of that size in the
+        whole disc (self.ng). Its sum over the rings is self.ng.
 
         """
 
@@ -676,12 +990,6 @@ class RTModel:
             Dust temperature in Kelvin.
 
         """
-
-        if self._in_fnu: 
-            raise RuntimeError("Conversion to Fnu already called for this model."
-                               " Function calculate_dust_temperature expects" 
-                               " self.sed_star in Flam.")
-
         lstar = self.parameters["lstar"]
         rstar = self.parameters["rstar"]
         tstar = self.parameters["tstar"]
@@ -706,11 +1014,15 @@ class RTModel:
                         dust_absr = np.trapezoid(qabs * planck_lam(wav_m, tstar), wav_m)
 
                     case "spectrum" | "json":
+                        # Scaling the observed flux by (d / R)^2 gives the surface
+                        # flux, pi * B_lambda; dividing by pi gives the intensity
+                        # B_lambda used in the other branch (Mueller 2007, Eq. 2.29).
                         dust_absr = np.trapezoid(
                             qabs
                             * self.sed_star
                             * SI_PER_MJY
-                            * ((dstar * PC) / (rstar * R_SUN)) ** 2 / np.pi,
+                            * ((dstar * PC) / (rstar * R_SUN)) ** 2
+                            / np.pi,
                             wav_m,
                         )
 
@@ -753,7 +1065,7 @@ class RTModel:
 
         for ii in range(int(self.parameters["ngrain"])):
             x = 2.0 * np.pi * self.ag[ii] / self.sed_wave
-            qext, qsca, *_ = mpy.efficiencies_mx(self.oc_nk, x)
+            qext, qsca, *_ = mpy.mie(self.oc_nk, x)
 
             self.qext[ii, :] = qext
             self.qsca[ii, :] = qsca
@@ -764,13 +1076,14 @@ class RTModel:
         """
         Calculate the scattered light contribution to the total emission from the disc.
 
+        Starlight is scattered isotropically, and the disc is optically thin. A grain
+        at distance r intercepts pi a^2 Q_sca L / (4 pi r^2) and re-radiates it over
+        4 pi sr, so the flux at the observer is the stellar flux times
+        N pi a^2 Q_sca / (4 pi r^2) = N a^2 Q_sca / (4 r^2) for N grains. Q_sca
+        already contains the albedo (Q_sca = albedo * Q_ext). Sets self.sed_scat and
+        self.sed_rings.
+
         """
-
-        if self._in_fnu: 
-            raise RuntimeError("Conversion to Fnu already called for this model."
-                               " Function calculate_dust_scatter expects" 
-                               " self.sed_star in Flam.")
-
         self.sed_scat = np.zeros(int(self.parameters["nwav"]))
         self.sed_rings = np.zeros(
             (
@@ -780,12 +1093,10 @@ class RTModel:
             )
         )
 
-        alb = self.qsca / self.qext
-
         for ii in range(int(self.parameters["nring"])):
             for ij in range(int(self.parameters["ngrain"])):
                 scalefactor = (
-                    self.qsca[ij,:]
+                    self.qsca[ij, :]
                     * self.sigma[ii, ij]
                     * (self.ag[ij] * UM) ** 2
                     / (4.0 * (self.radii[ii] * AU) ** 2)
@@ -826,6 +1137,10 @@ class RTModel:
         # Calculate emission
         for ii in range(int(self.parameters["nring"])):
             for ij in range(int(self.parameters["ngrain"])):
+                # Mueller (2007), Eq. 2.25 for the self.sigma[ii, ij] grains in the
+                # annulus: each grain of radius a emits 4 pi a^2 Q_abs pi B_lambda,
+                # so it contributes pi a^2 Q_abs B_lambda / d^2 to the flux at the
+                # observer.
                 scalefactor = (
                     MJY_PER_SI
                     * np.pi
@@ -853,26 +1168,31 @@ class RTModel:
 
         """
 
-        # Unit state
-        if self._in_fnu:
-            raise RuntimeError("Conversion to Fnu already called for this model.")
-
+        if self._in_fnu :
+            print("Conversion to Fnu already called for this model.")
+            return
+        
         convert_factor = (self.sed_wave * UM) ** 2 / C_LIGHT
 
         # Star
         self.sed_star *= convert_factor
+        
         # Disc Emission
         if self.sed_emit is not None:
             self.sed_emit *= convert_factor
             self.sed_ringe *= convert_factor
+        
         # Disc Scattering
         if self.sed_scat is not None:
             self.sed_scat *= convert_factor
             self.sed_rings *= convert_factor
+        
         self._in_fnu = True
+
         # Total disc model
         parts = [s for s in (self.sed_emit, self.sed_scat) if s is not None]
         self.sed_disc = sum(parts) if parts else None
+
 
     def calculate_disc_mass(
         self,
@@ -883,7 +1203,7 @@ class RTModel:
         q_big=Q_BIG,
         rho_big=None,
         exact=False,
-        mdust=None
+        mdust=None,
     ):
         """
         Estimate the total disc mass from the fitted dust mass.
@@ -931,3 +1251,242 @@ class RTModel:
             exact=exact,
         )
         return self.mdisc
+
+
+    def _ring_fluxes(self, wavelength, component):
+        """
+        Thermal and scattered flux of each annulus at one wavelength, in mJy,
+        summed over grain sizes.
+
+        Works whether or not ``flam_to_fnu`` has been called; it never changes the
+        stored spectra.
+
+        Returns
+        -------
+        emit, scat : float arrays
+            Flux of each annulus; zeros for a part that was not asked for.
+
+        """
+        valid = ("emit", "scat", "total")
+        if component not in valid:
+            raise ValueError(f"'component' must be one of {valid}, got {component!r}.")
+        if self.sed_wave is None:
+            raise ValueError("Run make_star first.")
+        if not self.sed_wave[0] <= wavelength <= self.sed_wave[-1]:
+            raise ValueError(
+                f"Wavelength {wavelength} um is outside the model grid "
+                f"({self.sed_wave[0]:.3g}-{self.sed_wave[-1]:.3g} um)."
+            )
+
+        nring = len(self.radii)
+        parts = {"emit": np.zeros(nring), "scat": np.zeros(nring)}
+        sources = {"emit": self.sed_ringe, "scat": self.sed_rings}
+        wanted = ("emit", "scat") if component == "total" else (component,)
+        found = False
+        for name in wanted:
+            if sources[name] is None:
+                continue
+            found = True
+            spectra = sources[name].sum(axis=1)  # (nring, nwav)
+            if not self._in_fnu:
+                spectra = spectra * ((self.sed_wave * UM) ** 2 / C_LIGHT)
+            parts[name] = np.array(
+                [np.interp(wavelength, self.sed_wave, row) for row in spectra]
+            )
+        if not found:
+            raise ValueError(
+                f"No '{component}' disc light to image: run calculate_dust_emission "
+                "and/or calculate_dust_scatter first."
+            )
+        return parts["emit"], parts["scat"]
+
+    def make_image(
+        self,
+        wavelength,
+        component="total",
+        inc=0.0,
+        pa=0.0,
+        npix=128,
+        pixscale=None,
+        beam=None,
+        unit="mJy/pixel",
+        oversample=3,
+        include_star=False,
+        aspect=None,
+        g1=None,
+        g2=None,
+        hg_weight=None,
+        nlos=48,
+    ):
+        """
+        Make a resolved image of the disc at one wavelength.
+
+        Each annulus of the radial model emits (or scatters) a flux F_i, spread over
+        its area A_i, so its face-on flux per unit area is F_i / A_i. The dust has a
+        Gaussian vertical profile with standard deviation H = aspect * r, and the
+        disc is optically thin, so the image is the integral of the emissivity along
+        each line of sight (see ``disc_surface_brightness``). This conserves the
+        total flux. A thin disc seen at inclination ``inc`` is stretched by cos(inc)
+        across the major axis and brightened by 1 / cos(inc); a thick disc is also
+        blurred across the minor axis by H sin(inc).
+
+        Thermal emission is isotropic. Scattered light is weighted by a two-component
+        Henyey-Greenstein phase function, 4 pi p(theta) relative to the isotropic
+        ``calculate_dust_scatter`` flux, so the flux of the scattered image changes
+        with the viewing geometry (forward-scattering grains brighten the near side).
+        The weighting is applied to the scattered light only: to ``component="scat"``
+        and to the scattered part of ``component="total"``. The side of the disc at
+        position angle ``pa + 90`` degrees is the near side. Run
+        ``calculate_dust_emission`` and/or ``calculate_dust_scatter`` first.
+
+        Parameters
+        ----------
+        wavelength : float
+            Wavelength in um, within the model grid.
+        component : {"total", "emit", "scat"}
+            Which disc light to image; "total" sums those that have been computed.
+        inc : float
+            Inclination in degrees (0 is face-on), from 0 up to but excluding 90.
+        pa : float
+            Position angle of the major axis in degrees, east of north.
+        npix : int
+            Number of pixels along each side of the (square) image.
+        pixscale : float, optional
+            Pixel size in arcsec. Default: a field of view of 2.4 outer radii.
+        beam : float, 2D array or kernel object, optional
+            Circular Gaussian beam FWHM in arcsec, or a PSF array or astropy-style
+            kernel object (with a 2D ``array`` attribute) sampled on the image grid.
+        unit : {"mJy/pixel", "mJy/arcsec2", "mJy/beam"}
+            Unit of the returned image; "mJy/beam" needs ``beam``.
+        oversample : int
+            Sub-pixels per pixel along each axis, to resolve sharp ring edges.
+        include_star : bool
+            Add the stellar photosphere as a point source at the centre.
+        aspect : float, optional
+            Scale height over radius, H / r, of the Gaussian vertical profile
+            exp(-z^2 / 2 H^2). Default: ``parameters["aspect"]`` if set, else 0.03.
+            Zero (or very small) gives a razor-thin disc.
+        g1, g2, hg_weight : float, optional
+            Asymmetry parameters of the forward and backward Henyey-Greenstein
+            components and the weight of the first. Defaults: the model parameters
+            ``hg_g1``, ``hg_g2`` and ``hg_weight`` if set, else 0.7, -0.2 and 0.7;
+            these are placeholders to be set from observations. Setting
+            ``g1 = g2 = 0`` gives isotropic scattering.
+        nlos : int
+            Line-of-sight samples per sub-pixel.
+
+        Returns
+        -------
+        image : ModelImage
+
+        """
+        valid_units = ("mJy/pixel", "mJy/arcsec2", "mJy/beam")
+        if unit not in valid_units:
+            raise ValueError(f"'unit' must be one of {valid_units}, got {unit!r}.")
+        if unit == "mJy/beam" and beam is None:
+            raise ValueError("unit 'mJy/beam' needs a beam.")
+        if not 0.0 <= inc < 90.0:
+            raise ValueError(f"'inc' must be in [0, 90) degrees, got {inc!r}.")
+        if int(npix) < 2 or int(oversample) < 1 or int(nlos) < 2:
+            raise ValueError(
+                "'npix' must be at least 2, 'oversample' at least 1 and 'nlos' "
+                "at least 2."
+            )
+        if self.edges is None:
+            raise ValueError("Run make_disc first.")
+        npix, oversample, nlos = int(npix), int(oversample), int(nlos)
+
+        if aspect is None:
+            aspect = self.parameters.get("aspect", ASPECT_RATIO)
+        if aspect < 0.0:
+            raise ValueError(f"'aspect' must not be negative, got {aspect!r}.")
+        if g1 is None:
+            g1 = self.parameters.get("hg_g1", HG_G1)
+        if g2 is None:
+            g2 = self.parameters.get("hg_g2", HG_G2)
+        if hg_weight is None:
+            hg_weight = self.parameters.get("hg_weight", HG_WEIGHT)
+        two_component_hg(0.0, g1, g2, hg_weight)  # validate the phase function
+
+        flux_emit, flux_scat = self._ring_fluxes(wavelength, component)  # mJy
+        scattered = component in ("scat", "total") and np.any(flux_scat)
+        phase = None
+        if scattered:
+
+            def phase(cos_theta):
+                return two_component_hg(cos_theta, g1, g2, hg_weight)
+
+        dstar = self.parameters["dstar"]  # pc, so 1 arcsec is 1 au per pc
+        if pixscale is None:
+            pixscale = 2.4 * self.edges[-1] / dstar / npix
+        pix_au = pixscale * dstar
+
+        # Face-on flux per unit disc area (mJy/au^2) in each annulus
+        edges = self.edges
+        annulus_area = np.pi * (edges[1:] ** 2 - edges[:-1] ** 2)
+
+        # Sky offsets of the sub-pixel centres (au), north up and east left
+        ngrid = npix * oversample
+        offset = ((np.arange(ngrid) + 0.5) / oversample - npix / 2.0) * pix_au
+        north, east = offset[:, None], -offset[None, :]
+        pa_rad = np.radians(pa)
+        along = east * np.sin(pa_rad) + north * np.cos(pa_rad)  # major axis
+        across = -east * np.cos(pa_rad) + north * np.sin(pa_rad)  # minor axis
+
+        # A face-on or razor-thin disc is the limit of a very small tilt or height
+        brightness = disc_surface_brightness(
+            np.broadcast_to(along, (ngrid, ngrid)).ravel(),
+            np.broadcast_to(across, (ngrid, ngrid)).ravel(),
+            edges,
+            flux_emit / annulus_area,
+            flux_scat / annulus_area,
+            max(np.radians(inc), MIN_INC),
+            max(aspect, MIN_ASPECT),
+            phase=phase,
+            nlos=nlos,
+        ).reshape(ngrid, ngrid)
+        data = (brightness * (pix_au / oversample) ** 2).reshape(
+            npix, oversample, npix, oversample
+        )
+        data = data.sum(axis=(1, 3))  # mJy per pixel
+
+        if include_star:
+            if self.sed_star is None:
+                raise ValueError("Run make_star first.")
+            spectrum = self.sed_star
+            if not self._in_fnu:  # convert on the model grid, then interpolate
+                spectrum = spectrum * (self.sed_wave * UM) ** 2 / C_LIGHT
+            star = np.interp(wavelength, self.sed_wave, spectrum)
+            centre = [npix // 2 - 1, npix // 2] if npix % 2 == 0 else [npix // 2]
+            data[np.ix_(centre, centre)] += star / len(centre) ** 2
+
+        beam_area = None  # in pixels
+        if beam is not None:
+            if hasattr(beam, "array"):
+                psf = beam.array
+                data = convolve_beam(data, psf)
+                beam_area = np.sum(psf) / np.max(psf)  # integral over peak
+            elif np.ndim(beam) == 0:
+                data = convolve_beam(data, beam / pixscale)
+                beam_area = 2.0 * np.pi * (beam / pixscale * FWHM_TO_SIGMA) ** 2
+            else:
+                data = convolve_beam(data, beam)
+                beam_area = np.sum(beam) / np.max(beam)  # integral over peak
+
+        if unit == "mJy/arcsec2":
+            data = data / pixscale**2
+        elif unit == "mJy/beam":
+            data = data * beam_area
+
+        return ModelImage(
+            data,
+            pixscale,
+            wavelength,
+            unit,
+            component,
+            inc,
+            pa,
+            beam,
+            aspect,
+            (g1, g2, hg_weight) if scattered else None,
+        )
