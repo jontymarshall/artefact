@@ -382,7 +382,6 @@ def test_scale_star_requires_model_to_cover_photometry(model_factory):
         model.scale_star()
 
 
-@pytest.mark.xfail(reason="scale_star does not yet reject a star already converted to F_nu")
 def test_scale_star_after_fnu_conversion_is_rejected(model_factory):
     model = model_factory()
     model.make_star()
@@ -846,7 +845,6 @@ def test_flam_to_fnu_total_with_only_one_disc_component(disc_model, model_factor
     assert star_only.sed_disc is None
 
 
-@pytest.mark.xfail(reason="_in_fnu is not reset when make_star creates a fresh F_lam star")
 def test_make_star_resets_the_unit_state(model_factory):
     model = model_factory()
     model.make_star()

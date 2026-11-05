@@ -609,11 +609,19 @@ class RTModel:
              Lower and upper bounds on wavelength range of photometry to scale
              photosphere model.
 
+        Raises
+        ------
+        ValueError
+            If the star has already been converted to F_nu by flam_to_fnu
+            (scaling compares the F_lam model with the photometry).
+
         """
 
         if self._in_fnu:
-            print("Star is already in Fnu units, scaling requires Flam units.")
-            return        
+            raise ValueError(
+                "Star is already in Fnu units, scaling requires Flam units: "
+                "call scale_star before flam_to_fnu."
+            )
 
         # Observations and stellar photosphere model
         fobs = np.asarray(self.obs_flux)
