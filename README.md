@@ -30,7 +30,7 @@ The structure of the repository is laid out as follows:
 │	└── HD104860_parameters.txt	<- Input parameters to artefact model
 ├── .gitignore					
 ├── LICENCE
-├── README.md  <- This file
+├── README.md      <- This file
 ├── requirements.txt  <- List of dependencies for artefact
-└── robin  <- Scripts written by Robin Young
+└── robin      <- Scripts written by Robin Young
 ```
