@@ -31,6 +31,6 @@ The structure of the repository is laid out as follows:
 ├── .gitignore					
 ├── LICENCE
 ├── README.md          <- This file
-├── requirements.txt  <- List of dependencies for artefact
+├── requirements.txt   <- List of dependencies for artefact
 └── robin              <- Scripts written by Robin Young
 ```
