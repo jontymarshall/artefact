@@ -10,23 +10,27 @@ The structure of the repository is laid out as follows:
 
 ```
 .
-├── artefact.py					<- The artefact radiative transfer code
-├── artefact_parameters.txt		<- Default parameters file for artefact
-├── artefact_script.py			<- Default script file for artefact
-├── artefact_visual.py			<- Visualisation tools for use with artefact
+├── core.py					<- The artefact radiative transfer code
+├── image.py			<- Code for generating images with artefact models
+├── fitting.py			<- Code for fitting models with synthetic photometry
+├── phoenix.py			<- Code for parsing the PHOENIX stellar models grid
 ├── data
 │	├── optical_constants		
 │	│	└── astrosil.lnk		<- Astronomical silicate n,k values
 │	└── stellar_models		
 │		├── A0V_spectrum.txt 	<- A star stellar photosphere model
-│		└── G2V_spectrum.txt	<- G star stellar photosphere model
-├── example						
+│		├── G2V_spectrum.txt	<- G star stellar photosphere model
+│		├── phoenix_grid.npz	<- PHOENIX stellar model grid
+│	  └── phoenix_grid.sha256	<- Checkfile for provided PHOENIX model grid
+├── example
+│	├── artefact_parameters.txt	<- Default parameters file for artefact
+│	├── artefact_script.py			<- Default script file for artefact	
 │	├── HD104860_example.py   	<- Example script for HD104860
 │	├── HD104860_photometry.txt <- Input data for model fitting, obtained from Vizier using PySED
 │	└── HD104860_parameters.txt	<- Input parameters to artefact model
 ├── .gitignore					
 ├── LICENCE
 ├── README.md					<- This file
-├── requirements.txt			<- List of dependencies for artefact
-└── robin						<- Scripts written by Robin Young
+├── requirements.txt	<- List of dependencies for artefact
+└── robin						  <- Scripts written by Robin Young
 ```
