@@ -26,7 +26,7 @@ The structure of the repository is laid out as follows:
 │	├── artefact_parameters.txt	<- Default parameters file for artefact
 │	├── artefact_script.py		<- Default script file for artefact	
 │	├── HD104860_example.py   	<- Example script for HD104860
-│	├── HD104860_photometry.txt  <- Input data for model fitting, obtained from Vizier using PySED
+│	├── HD104860_photometry.txt    <- Input data for model fitting, obtained from Vizier using PySED
 │	└── HD104860_parameters.txt	<- Input parameters to artefact model
 ├── .gitignore					
 ├── LICENCE
