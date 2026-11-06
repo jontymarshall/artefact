@@ -21,7 +21,7 @@ The structure of the repository is laid out as follows:
 │		├── A0V_spectrum.txt 	<- A star stellar photosphere model
 │		├── G2V_spectrum.txt	<- G star stellar photosphere model
 │		├── phoenix_grid.npz	<- PHOENIX stellar model grid
-│	  └── phoenix_grid.sha256	<- Checkfile for provided PHOENIX model grid
+│		└── phoenix_grid.sha256	<- Checkfile for provided PHOENIX model grid
 ├── example
 │	├── artefact_parameters.txt	<- Default parameters file for artefact
 │	├── artefact_script.py		<- Default script file for artefact	
