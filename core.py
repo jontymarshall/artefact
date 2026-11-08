@@ -688,13 +688,14 @@ class ModBBModel:
         Model parameters, keyed by name.
     sed_wave : ndarray
         Model wavelengths in microns.
-    sed_star, sed_emit, sed_disc : ndarray
-        Stellar photosphere, thermal emission, and total disc
-        spectra on the `sed_wave` grid. Total disc emission only set by flam_to_fnu.
+    sed_star, sed_modbb : ndarray
+        Stellar photosphere and modified blackbody component spectra on the 
+        `sed_wave` grid. Total disc emission only set by flam_to_fnu.
     obs_wave, obs_flux, obs_uncs : array-like or None
         Observed wavelengths (um), fluxes and uncertainties.
-    tdust, rbb, rre, lam0, beta : ndarray or float
-        Dust temperature, blackbody radius, inferred radius, break wavelength, beta.
+    tdust, adust, rbb, rre, lam0, beta : ndarray or float
+        Dust temperature, scaling factor, blackbody radius, inferred radius, 
+        break wavelength, beta.
     _in_fnu : bool
         Flag if the conversion from FLAM to FNU has been carried out yet.
     """
@@ -806,7 +807,7 @@ class ModBBModel:
         
         # Disc Emission
         if self.sed_emit is not None:
-            self.sed_emit = scalefactor * self.sed_emit
+            self.sed_emit *= scalefactor
 
         self._in_fnu = True
 

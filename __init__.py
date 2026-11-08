@@ -17,7 +17,7 @@ import takes a few seconds while numba loads.
 """
 # metadata
 __author__ = "Jonathan P. Marshall"
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 __copyright__ = "2023-26, Jonathan P. Marshall"
 __email__ = ""
 __license__ = "GNU GPL V3"
@@ -43,12 +43,18 @@ __citation__ = r"""@ARTICLE{2023MNRAS.521.5940M,
 # package contents
 from .core import (
     # model and image classes
+    StarModel,
+    ModBBModel,
     RTModel,
     # stellar and dust helpers
-    calc_luminosity,
+    calculate_luminosity,
+    calculate_tbb,
+    calculate_rbb,
+    calculate_rre,
     extrapolate_wavelengths,
     planck_lam,
     planck_nu,
+    modified_blackbody,
     ring_grid,
     # disc mass
     disc_mass_three_slope,
@@ -146,8 +152,13 @@ from .phoenix import (
 # public API
 __all__ = [
     "ModelImage",
+    "StarModel",
+    "ModBBModel",
     "RTModel",
-    "calc_luminosity",
+    "calculate_luminosity",
+    "calculate_tbb",
+    "calculate_rbb",
+    "calculate_rre",
     "convolve_beam",
     "disc_mass_three_slope",
     "disc_surface_brightness",
