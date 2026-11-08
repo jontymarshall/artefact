@@ -67,6 +67,8 @@ Q_BIG = 2.8  # slope of the primordial planetesimals, s_km < s < s_max
 @njit(cache=True)
 def planck_lam(wav, T):
     """
+    Calculate Planck function in wavelength units.
+
     Parameters
     ----------
     wav : float or array
@@ -88,6 +90,8 @@ def planck_lam(wav, T):
 @njit(cache=True)
 def planck_nu(freq, T):
     """
+    Calculate Planck function in frequency units
+
     Parameters
     ----------
     freq : float or array
@@ -105,6 +109,106 @@ def planck_nu(freq, T):
     intensity = a / ((C_LIGHT**2) * (np.exp(b) - 1.0))
     return intensity
 
+
+@njit(cache=True)
+def modified_blackbody(wav, T, lam0, beta):
+    """
+    Calculate modified blackbody defined as 
+    I = B(lam,T) 
+    before the break wavelength lam0 and 
+    I = B(lam,T) * (lam0/lam)**beta 
+    beyond the break wavelength lam0.
+
+    Parameters
+    ----------
+    wav : float or array
+        Wavelengths in microns.
+    T : float
+        Temperature in Kelvin.
+    lam0 : float
+        Break wavelength in microns.
+    beta : float
+        Exponent of modified emission beyond lam0.
+    
+    Returns
+    -------
+    intensity : float or array
+        I(wav,T) W/m^2/m/sr
+    """
+
+    intensity = planck_lam(wav*UM, T)
+
+    intensity[np.where(wav > lam0)] *= (lam0/wav)**beta
+
+    return intensity
+
+def calculate_tbb(rdust,lstar):
+    """
+    Calculate blackbody temperature for dust (in Kelvin) at a distance Rbb 
+    (in au) from a star of luminosity Lstar (in Lsol).
+    
+    Parameters
+    ----------
+    rdust : float or array
+        Radius of dust in au.
+    lstar : float
+        Luminosity of star in Lsol.
+    
+    Returns
+    -------
+    tbb : float
+        Tbb K
+
+    """
+
+    tbb = T_BB_1AU * (lstar**0.25) * (rdust ** (-0.5))
+
+    return tbb
+
+def calculate_rbb(tdust,lstar):
+    """
+    Calculate blackbody radius for dust (in au) at a blackbody temperature 
+    Tbb (in Kelvin) around a star of luminosity Lstar (in Lsol).
+    
+    Parameters
+    ----------
+    tdust : float or array
+        Temperature of dust in Kelvin.
+    lstar : float
+        Luminosity of star in Lsol.
+    
+    Returns
+    -------
+    rbb : float
+        Rbb au
+    """
+
+    rbb = (lstar**0.5) * ((tdust / T_BB_1AU) ** (-2.0))
+
+    return rbb
+
+def calculate_rre(lstar):
+    """
+    Calculate estimated radius for dust (in au) around a star of luminosity 
+    Lstar (in Lsol) using the Rd-Ls relation inferred from REASONS (Matra+2025).
+    
+    Parameters
+    ----------
+    lstar : float
+        Luminosity of star in Lsol.
+    
+    Returns
+    -------
+    rre : float
+        Rre au
+    """
+
+    R0 = 92.0 # +/- 6 au
+    gamma = 0.14 # +/- 0.03
+
+    rre = R0 * lstar**gamma
+
+    return rre
 
 def mie_efficiencies(m, x):
     """
@@ -275,7 +379,7 @@ def ring_grid(rmin, rmax, nring):
 
 
 @njit
-def calc_luminosity(rstar, tstar):
+def calculate_luminosity(rstar, tstar):
     """
     Calculate the luminosity of the source.
 
@@ -295,17 +399,13 @@ def calc_luminosity(rstar, tstar):
     return lphot
 
 
-class RTModel:
-    """Optically thin radiative transfer model of a dusty circumstellar disc.
+class StarModel:
+    """
+    Stellar photosphere model as its own class to avoid repetition in modified
+    blackbody and radiative transfer model classes.
 
     Model parameters are read from a plain text file by `get_parameters` and
-    stored in the `parameters` dictionary. The methods depend on each other's
-    results, so they are intended to be called in this order::
-
-        get_parameters -> make_star -> (scale_star) -> make_dust
-        -> read_optical_constants -> make_disc -> calculate_surface_density
-        -> calculate_qabs -> calculate_dust_scatter -> calculate_dust_emission
-        -> flam_to_fnu
+    stored in the `parameters` dictionary.
 
     Attributes
     ----------
@@ -313,121 +413,49 @@ class RTModel:
         Model parameters, keyed by name.
     sed_wave : ndarray
         Model wavelengths in microns.
-    sed_star, sed_emit, sed_scat, sed_disc : ndarray
-        Stellar photosphere, thermal emission, scattered light and total disc
-        spectra on the `sed_wave` grid. Total disc emission only set by flam_to_fnu.
-    sed_rings, sed_ringe : ndarray
-        Per-ring, per grain scattered light and per-ring, per-grain thermal
-        emission.
-    obs_wave, obs_flux, obs_uncs : array-like or None
-        Observed wavelengths (um), fluxes and uncertainties.
-    ag, ng, mg : ndarray
-        Grain sizes (um), numbers and masses (kg).
-    oc_nk : ndarray
-        Complex refractive index of the dust on the `sed_wave` grid.
-    qext, qsca, qabs : ndarray
-        Grain extinction, scattering and absorption efficiencies.
-    scale, radii, dr, areas, sigma, tdust : ndarray or float
-        Radial disc structure, surface number density and dust temperatures.
-    _in_fnu : bool
-        Flag if the conversion from FLAM to FNU has been carried out yet.
+    sed_star : ndarray
+        Stellar photosphere on the `sed_wave` grid.
     """
-
-    # Retained so that RTModel.planck_lam(...) etc. keep working.
-    planck_lam = staticmethod(planck_lam)
-    planck_nu = staticmethod(planck_nu)
-    calc_luminosity = staticmethod(calc_luminosity)
 
     def __init__(self):
         self.parameters = {}
 
         # Spectra
-        self.sed_wave = None
-        self.sed_star = None
-        self.sed_emit = None
-        self.sed_scat = None
-        self.sed_disc = None
-        self.sed_rings = None
-        self.sed_ringe = None
+        self.wavelengths = None
+        self.photosphere = None
 
         # Observations
-        self.obs_flux = None
-        self.obs_uncs = None
-        self.obs_wave = None
-        self.obs_band = None  # optional band names (data/filters.yaml), for filter-integrated fits
+        self.obs_flux = None    # flux densities in mJy
+        self.obs_uncs = None    # uncertainties in mJy
+        self.obs_wave = None    # wavelengths in um
+        self.obs_band = None    # optional band names (data/filters.yaml), for filter-integrated fits
         self.stellarfit = None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
-
-        # Dust grains
-        self.ag = None
-        self.ng = None
-        self.mg = None
-        self.oc_nk = None
-        self.qext = None
-        self.qsca = None
-        self.qabs = None
-
-        # Disc structure
-        self.scale = None
-        self.radii = None
-        self.edges = None
-        self.dr = None
-        self.areas = None
-        self.sigma = None
-        self.tdust = None
-        self.mdisc = None
 
         # Scaling
         self._in_fnu = False
 
-    def get_parameters(self, filename):
-        """
-        Parameters
-        ----------
-        filename : str
-            Filename containing plain text name/value pairs for model values
-
-        Returns
-        -------
-        parameters : Dictionary
-            Dictionary of parameters for the model.
-
-        """
-        with open(filename, encoding="utf-8") as f:
-            for raw_line in f:
-                text = raw_line.split("#", 1)[0].strip()
-                if not text:
-                    continue
-                key, _, value = text.partition(":")
-                key = key.strip()
-                value = value.strip()
-                try:
-                    self.parameters[key] = float(value)
-                except ValueError:
-                    self.parameters[key] = value.strip("'\"")
-
-        return self.parameters
-
-    def make_star(self):
+    def parse_star(self,parameters):
         """
         Create a stellar photosphere model in FLAM units.
-        Sets self.sed_wave and self.sed_star .
+        Sets self.wavelengths and self.photosphere to be returned to either a
+        ModBBModel or RTModel.
 
         """
 
         self._in_fnu = False #reset _in_fnu flag
 
         # rstar and tstar are outputs of the "phoenix" fit, so they need not be given for it
-        rstar = self.parameters.get("rstar")
-        tstar = self.parameters.get("tstar")
-        dstar = self.parameters["dstar"]
+        rstar = parameters.get("rstar")
+        tstar = parameters.get("tstar")
+        dstar = parameters["dstar"]
 
-        lmin = self.parameters["lmin"]
-        lmax = self.parameters["lmax"]
-        nwav = int(self.parameters["nwav"])
+        lmin = parameters["lmin"]
+        lmax = parameters["lmax"]
+        nwav = int(parameters["nwav"])
 
         wavelengths = np.geomspace(lmin, lmax, num=nwav)  # um
 
-        stype = self.parameters["stype"]
+        stype = parameters["stype"]
         valid_types = ["blackbody", "spectrum", "json", "phoenix"]
 
         match stype:
@@ -465,7 +493,6 @@ class RTModel:
                 )
 
             case "phoenix":
-                # the grid continues as a Rayleigh-Jeans tail past 5.4 um, so it covers any wavelength
                 _, photosphere = self.fit_phoenix(wavelengths)
                 photosphere *= MJY_PER_SI
 
@@ -474,8 +501,8 @@ class RTModel:
                     f"'stype' must be one of {valid_types}, got {stype!r}."
                 )
 
-        self.sed_wave = wavelengths
-        self.sed_star = photosphere
+        self.wavelengths = wavelengths
+        self.photosphere = photosphere
 
     def read_json(self):
         """
@@ -536,7 +563,7 @@ class RTModel:
         """
         Fit a stellar photosphere model from a pre-compiled PHOENIX grid file.
 
-        PHOENIX models have wavelengths in microns and flux densities in Jy.
+        PHOENIX models have wavelengths in Angstroms and fluxes in ergs/cm-2/s-1/A-1/.
 
         Returns
         -------
@@ -641,6 +668,278 @@ class RTModel:
         popt, _ = curve_fit(lambda x, a: a * x, model, fobs[mask], sigma=uobs[mask])
 
         self.sed_star *= popt[0]
+
+
+class ModBBModel:
+    """Optically thin radiative transfer model of a dusty circumstellar disc.
+
+    Model parameters are read from a plain text file by `get_parameters` and
+    stored in the `parameters` dictionary. The methods depend on each other's
+    results, so they are intended to be called in this order:
+
+        get_parameters -> make_star -> (scale_star) -> make_dust
+        -> read_optical_constants -> make_disc -> calculate_surface_density
+        -> calculate_qabs -> calculate_dust_scatter -> calculate_dust_emission
+        -> flam_to_fnu
+
+    Attributes
+    ----------
+    parameters : dict
+        Model parameters, keyed by name.
+    sed_wave : ndarray
+        Model wavelengths in microns.
+    sed_star, sed_emit, sed_disc : ndarray
+        Stellar photosphere, thermal emission, and total disc
+        spectra on the `sed_wave` grid. Total disc emission only set by flam_to_fnu.
+    obs_wave, obs_flux, obs_uncs : array-like or None
+        Observed wavelengths (um), fluxes and uncertainties.
+    tdust, rbb, rre, lam0, beta : ndarray or float
+        Dust temperature, blackbody radius, inferred radius, break wavelength, beta.
+    _in_fnu : bool
+        Flag if the conversion from FLAM to FNU has been carried out yet.
+    """
+
+    # Retained so that RTModel.planck_lam(...) etc. keep working.
+    planck_lam = staticmethod(planck_lam)
+    planck_nu = staticmethod(planck_nu)
+    calculate_luminosity = staticmethod(calculate_luminosity)
+
+    def __init__(self):
+        self.parameters = {}
+
+        # Spectra
+        self.sed_wave = None
+        self.sed_star = None
+        self.sed_modb = None # no scattered light -> sed_modb == sed_disc by default
+
+        # Observations
+        self.obs_flux = None
+        self.obs_uncs = None
+        self.obs_wave = None
+        self.obs_band = None  # optional band names (data/filters.yaml), for filter-integrated fits
+        self.stellarfit = None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+
+        # Disc emission
+        self.tdust = None # dust temperature in Kelvin
+        self.rbb   = None # dust radius assuming blackbody emission
+        self.rre   = None # dust radius assuming R-L relationship from Matra+2025
+        self.adust = None # scaling factor for emission in au**2
+        self.lam0  = None # break wavelength for modified blackbody emission
+        self.beta  = None # modified blacbody emission exponent beyond lam0
+
+        # Scaling
+        self._in_fnu = False
+
+    def get_parameters(self, filename):
+        """
+        Parameters
+        ----------
+        filename : str
+            Filename containing plain text name/value pairs for model values
+
+        Returns
+        -------
+        parameters : Dictionary
+            Dictionary of parameters for the model.
+
+        """
+        with open(filename, encoding="utf-8") as f:
+            for raw_line in f:
+                text = raw_line.split("#", 1)[0].strip()
+                if not text:
+                    continue
+                key, _, value = text.partition(":")
+                key = key.strip()
+                value = value.strip()
+                try:
+                    self.parameters[key] = float(value)
+                except ValueError:
+                    self.parameters[key] = value.strip("'\"")
+
+        return self.parameters
+
+    def make_star(self):
+
+        self._in_fnu = False
+
+        star = StarModel()
+        star = star.parse_star(self.parameters)
+        star = star.scale_star(lmin=SCALE_WAVE_MIN, lmax=SCALE_WAVE_MAX)
+
+        if stype == "phoenix":
+            self.parameters = self.parameters | star.parameters
+
+        self.sed_wave = wavelengths
+        self.sed_star = photosphere
+
+
+    def calculate_modified_blackbody(self):
+        """
+        Calculate scaled modified blackbody emission profile for dust emission.
+        """
+
+        self.sed_modbb = (self.adust*AU**2)*modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
+
+    def calculate_radii(self):
+        """
+        Calculate blackbody radius and R-L relationship radius.
+        """
+
+        self.rbb = calculate_rbb(self.tdust,self.lstar)
+        self.rre = calculate_rre(self.lstar)
+
+    def flam_to_fnu(self):
+        """
+        Convert calculated stellar and disc emission (in F_lam units) to F_nu (in mJy).
+        Sets self.sed_disc .
+
+        """
+
+        if self._in_fnu :
+            print("Conversion to Fnu already called for this model.")
+            return
+        
+        convert_factor = (self.sed_wave * UM) ** 2 / C_LIGHT
+
+        # Star
+        self.sed_star *= convert_factor
+        
+        # Disc Emission
+        if self.sed_emit is not None:
+            self.sed_emit = scalefactor * self.sed_emit
+
+        self._in_fnu = True
+
+class RTModel:
+    """Optically thin radiative transfer model of a dusty circumstellar disc.
+
+    Model parameters are read from a plain text file by `get_parameters` and
+    stored in the `parameters` dictionary. The methods depend on each other's
+    results, so they are intended to be called in this order:
+
+        get_parameters -> make_star -> (scale_star) -> make_dust
+        -> read_optical_constants -> make_disc -> calculate_surface_density
+        -> calculate_qabs -> calculate_dust_scatter -> calculate_dust_emission
+        -> flam_to_fnu
+
+    Attributes
+    ----------
+    parameters : dict
+        Model parameters, keyed by name.
+    sed_wave : ndarray
+        Model wavelengths in microns.
+    sed_star, sed_emit, sed_scat, sed_disc : ndarray
+        Stellar photosphere, thermal emission, scattered light and total disc
+        spectra on the `sed_wave` grid. Total disc emission only set by flam_to_fnu.
+    sed_rings, sed_ringe : ndarray
+        Per-ring, per grain scattered light and per-ring, per-grain thermal
+        emission.
+    obs_wave, obs_flux, obs_uncs : array-like or None
+        Observed wavelengths (um), fluxes and uncertainties.
+    ag, ng, mg : ndarray
+        Grain sizes (um), numbers and masses (kg).
+    oc_nk : ndarray
+        Complex refractive index of the dust on the `sed_wave` grid.
+    qext, qsca, qabs : ndarray
+        Grain extinction, scattering and absorption efficiencies.
+    scale, radii, dr, areas, sigma, tdust : ndarray or float
+        Radial disc structure, surface number density and dust temperatures.
+    _in_fnu : bool
+        Flag if the conversion from FLAM to FNU has been carried out yet.
+    """
+
+    # Retained so that RTModel.planck_lam(...) etc. keep working.
+    planck_lam = staticmethod(planck_lam)
+    planck_nu = staticmethod(planck_nu)
+    calculate_luminosity = staticmethod(calculate_luminosity)
+
+    def __init__(self):
+        self.parameters = {}
+
+        # Spectra
+        self.sed_wave = None
+        self.sed_star = None
+        self.sed_emit = None
+        self.sed_scat = None
+        self.sed_disc = None
+        self.sed_rings = None
+        self.sed_ringe = None
+
+        # Observations
+        self.obs_flux = None
+        self.obs_uncs = None
+        self.obs_wave = None
+        self.obs_band = None  # optional band names (data/filters.yaml), for filter-integrated fits
+        self.stellarfit = None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+
+        # Dust grains
+        self.ag = None
+        self.ng = None
+        self.mg = None
+        self.oc_nk = None
+        self.qext = None
+        self.qsca = None
+        self.qabs = None
+
+        # Disc structure
+        self.scale = None
+        self.radii = None
+        self.edges = None
+        self.dr = None
+        self.areas = None
+        self.sigma = None
+        self.tdust = None
+        self.mdisc = None
+
+        # Scaling
+        self._in_fnu = False
+
+    def get_parameters(self, filename):
+        """
+        Parameters
+        ----------
+        filename : str
+            Filename containing plain text name/value pairs for model values
+
+        Returns
+        -------
+        parameters : Dictionary
+            Dictionary of parameters for the model.
+
+        """
+        with open(filename, encoding="utf-8") as f:
+            for raw_line in f:
+                text = raw_line.split("#", 1)[0].strip()
+                if not text:
+                    continue
+                key, _, value = text.partition(":")
+                key = key.strip()
+                value = value.strip()
+                try:
+                    self.parameters[key] = float(value)
+                except ValueError:
+                    self.parameters[key] = value.strip("'\"")
+
+        return self.parameters
+
+    def make_star(self):
+        """
+        Create a stellar photosphere model in FLAM units.
+        Sets self.sed_wave and self.sed_star .
+
+        """
+        self._in_fnu = False
+
+        star = StarModel()
+        star = star.parse_star(self.parameters)
+        star = star.scale_star(lmin=SCALE_WAVE_MIN, lmax=SCALE_WAVE_MAX)
+
+        if stype == "phoenix":
+            self.parameters = self.parameters | star.parameters
+            self.stellarfit = star.stellarfit
+
+        self.sed_wave = wavelengths
+        self.sed_star = photosphere
 
     def make_dust(self):
         """
