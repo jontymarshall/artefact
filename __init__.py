@@ -17,7 +17,7 @@ import takes a few seconds while numba loads.
 """
 # metadata
 __author__ = "Jonathan P. Marshall"
-__version__ = "0.0.9"
+__version__ = "0.1.0"
 __copyright__ = "2023-26, Jonathan P. Marshall"
 __email__ = ""
 __license__ = "GNU GPL V3"
