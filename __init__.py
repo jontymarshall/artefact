@@ -7,7 +7,7 @@ that users can write::
     import artefact
 
     model = artefact.RTModel()
-    model.read_json("parameters.json")
+    model.get_parameters("parameters.txt")
     model.make_star()
     ...
     image = model.make_image(70.0, inc=60.0, pa=30.0)

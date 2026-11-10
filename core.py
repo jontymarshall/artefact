@@ -33,6 +33,7 @@ from .phoenix import FEH_PRIOR, LOGG_PRIOR, fit_star, load_grid
 
 
 # Physical constants (SI units)
+G_GRAV = const.G.value # 6.6743e-11 m^3 / kg / s^2
 H_PLANCK = const.h.value  # 6.626e-34 J s
 C_LIGHT = const.c.value  # 299792458.0 m / s
 K_B = const.k_B.value  # 1.38e-23 J / K
@@ -41,6 +42,7 @@ AU = const.au.value  # 1.495978707e11 m
 PC = const.pc.value  # 3.0857e16 m
 L_SUN = const.L_sun.value  # 3.828e26 W
 R_SUN = const.R_sun.value  # 6.96342e8 m
+M_SUN = const.M_sun.value  # 1.99e30 kg
 M_EARTH = const.M_earth.value  # 5.97237e24 kg
 UM = 1e-6  # metres per micron, for wavelengths in microns
 
@@ -67,7 +69,7 @@ Q_BIG = 2.8  # slope of the primordial planetesimals, s_km < s < s_max
 # are unbound when released from a parent body on a circular orbit.
 BETA_BLOWOUT = 0.5
 DEFAULT_NRING = 30  # annuli per belt in a multi-belt disc, if a belt gives none
-BELT_TYPES = ("gauss", "onepl", "twopl", "arbit")  # shapes of a single belt
+BELT_TYPES = ("gauss", "onepl", "twopl", "arbit", "multi")  # shapes of a single belt
 
 @njit(cache=True)
 def planck_lam(wav, T):
@@ -305,10 +307,10 @@ def make_belt_profile(params):
 
     Parameters
     ----------
-    spec : dict
+    params : dict
         ``dtype`` and its parameters (the same names as the single-belt model):
 
-        - "gauss": ``rpeak``, ``rfwhm`` (spans rpeak +/- 3 sigma);
+        - "gauss": ``rpeak``, ``rfwhm`` (spans rpeak +/- 5 sigma);
         - "onepl": ``rin``, ``rout``, ``alpha_out``;
         - "twopl": ``rin``, ``rout``, ``rpeak``, ``alpha_in``, ``alpha_out``;
         - "arbit": a table of radii (au) and relative surface number density,
@@ -338,7 +340,7 @@ def make_belt_profile(params):
         case "gauss":
             rpeak = params["rpeak"]
             sigma = params["rfwhm"] / FWHM_PER_SIGMA
-            rmin, rmax = rpeak - 3.0 * sigma, rpeak + 3.0 * sigma
+            rmin, rmax = rpeak - 5.0 * sigma, rpeak + 5.0 * sigma
             if rmin < 0.0:
                 rmin = 1.0
 
@@ -346,15 +348,15 @@ def make_belt_profile(params):
                 return np.exp(-0.5 * ((radii - rpeak) / sigma) ** 2)
 
         case "onepl":
-            rmin, rmax = spec["rin"], spec["rout"]
-            alpha = spec["alpha_out"]
+            rmin, rmax = params["rin"], params["rout"]
+            alpha = params["alpha_out"]
 
             def density(radii):
                 return (radii / rmin) ** alpha
 
         case "twopl":
-            rmin, rmax = spec["rin"], spec["rout"]
-            rpeak, alpha, gamma = spec["rpeak"], spec["alpha_in"], spec["alpha_out"]
+            rmin, rmax = params["rin"], params["rout"]
+            rpeak, alpha, gamma = params["rpeak"], params["alpha_in"], params["alpha_out"]
 
             def density(radii):
                 return np.where(
@@ -869,9 +871,9 @@ class ModBBModel:
     stored in the `parameters` dictionary. The methods depend on each other's
     results, so they are intended to be called in this order:
 
-        get_parameters -> make_star -> (scale_star) -> make_dust
-        -> read_optical_constants -> make_disc -> calculate_surface_density
-        -> calculate_qabs -> calculate_dust_scatter -> calculate_dust_emission
+        get_parameters -> make_star -> make_dust -> read_optical_constants 
+        -> make_disc -> calculate_surface_density -> calculate_qabs 
+        -> calculate_dust_scatter -> calculate_dust_emission
         -> flam_to_fnu
 
     Attributes
@@ -1127,12 +1129,12 @@ class RTModel:
         star = star.parse_star(self.parameters)
         star = star.scale_star(lmin=SCALE_WAVE_MIN, lmax=SCALE_WAVE_MAX)
 
-        if stype == "phoenix":
+        if self.parameters["stype"] == "phoenix":
             self.parameters = self.parameters | star.parameters
             self.stellarfit = star.stellarfit
 
-        self.sed_wave = wavelengths
-        self.sed_star = photosphere
+        self.sed_wave = star.wavelengths
+        self.sed_star = star.photosphere
 
 
     def calculate_blowout_size(self):
@@ -1146,11 +1148,11 @@ class RTModel:
         """
         if "mstar" not in self.parameters and "lstar" not in self.parameters:
             raise ValueError("Calculation of blowout size requires Lstar, Mstar.")
-            self.parameters["mstar"] = calculate_mass(self.parameters["lstar"])
+            
 
         elif "mstar" not in self.parameters and "lstar" in self.parameters:
             warnings.warn("Warning: Mstar not provided, calculating from Lstar.")
-            lstar
+            self.parameters["mstar"] = calculate_mass(self.parameters["lstar"])
 
         self.ablow = blowout_size(
             self.parameters["lstar"],
@@ -1200,6 +1202,9 @@ class RTModel:
         ngrain = int(self.parameters["ngrain"])
         mdust = self.parameters["mdust"]
         q = self.parameters["q"]
+
+        if amin == "blowout":
+            amin = _amin()
 
         if amax <= amin:
             raise ValueError(
@@ -1310,7 +1315,7 @@ class RTModel:
         return list(belts)
 
 
-    def _make_multi_belt_profle(self):
+    def _make_multi_belt_profile(self):
         """
         Radial structure of a disc made of several belts.
 
@@ -1329,7 +1334,7 @@ class RTModel:
         puts in each annulus.
 
         """
-        belts = self.read_belts()
+        belts = _read_belts()
         profiles, weights, boundaries = [], [], []
         for index, belt in enumerate(belts):
             spec = dict(belt)
@@ -1337,7 +1342,7 @@ class RTModel:
                 raise ValueError("A belt cannot itself be of dtype 'multi'.")
             spec.setdefault("nring", DEFAULT_NRING)
             try:
-                rmin, rmax, nring, density = belt_profile(spec)
+                rmin, rmax, nring, density = make_belt_profile(spec)
             except (KeyError, ValueError) as error:
                 raise ValueError(f"Belt {index}: {error}") from error
 
