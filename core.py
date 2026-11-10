@@ -63,6 +63,11 @@ S_MAX = 2e11  # 200 km, largest planetesimal
 Q_MED = 3.7  # slope of the collisional cascade, s_mm < s < s_km
 Q_BIG = 2.8  # slope of the primordial planetesimals, s_km < s < s_max
 
+# Radiation pressure: grains whose radiation-to-gravity force ratio beta exceeds 0.5
+# are unbound when released from a parent body on a circular orbit.
+BETA_BLOWOUT = 0.5
+DEFAULT_NRING = 30  # annuli per belt in a multi-belt disc, if a belt gives none
+BELT_TYPES = ("gauss", "onepl", "twopl", "arbit")  # shapes of a single belt
 
 @njit(cache=True)
 def planck_lam(wav, T):
@@ -142,6 +147,7 @@ def modified_blackbody(wav, T, lam0, beta):
 
     return intensity
 
+
 def calculate_tbb(rdust,lstar):
     """
     Calculate blackbody temperature for dust (in Kelvin) at a distance Rbb 
@@ -165,6 +171,7 @@ def calculate_tbb(rdust,lstar):
 
     return tbb
 
+
 def calculate_rbb(tdust,lstar):
     """
     Calculate blackbody radius for dust (in au) at a blackbody temperature 
@@ -186,6 +193,7 @@ def calculate_rbb(tdust,lstar):
     rbb = (lstar**0.5) * ((tdust / T_BB_1AU) ** (-2.0))
 
     return rbb
+
 
 def calculate_rre(lstar):
     """
@@ -209,6 +217,172 @@ def calculate_rre(lstar):
     rre = R0 * lstar**gamma
 
     return rre
+
+
+@njit
+def blowout_size(lstar, mstar, density, qpr=1.0, beta=BETA_BLOWOUT):
+    """
+    Radiation pressure blow-out size of a spherical grain.
+
+    The ratio of the radiation force to gravity is independent of distance,
+
+        beta = 3 L Q_pr / (16 pi G M c rho s)
+
+    (Burns, Lamy & Soter 1979), so grains smaller than the size at which
+    beta = ``beta`` (0.5 for grains released on circular orbits, 1 for grains at
+    rest) are expelled on hyperbolic orbits. Solving for s gives
+
+        s_blow = 3 L Q_pr / (16 pi G M c rho beta).
+
+    Parameters
+    ----------
+    lstar : float
+        Stellar luminosity in solar units.
+    mstar : float
+        Stellar mass in solar units.
+    density : float
+        Grain bulk density in g/cm3.
+    qpr : float
+        Radiation pressure efficiency, Q_abs + Q_sca (1 - <cos theta>). It is 1
+        for large grains; use a value below 1 for grains close to the blow-out
+        size, whose Q_pr is smaller than the geometric limit.
+    beta : float
+        Critical force ratio (0.5 by default).
+
+    Returns
+    -------
+    float
+        Blow-out size in um.
+
+    """
+    for name, value in (("lstar", lstar), ("mstar", mstar), ("density", density),
+                        ("qpr", qpr), ("beta", beta)):  # fmt: skip
+        if not value > 0.0:
+            raise ValueError(f"{name} must be positive, got {value!r}.")
+
+    size = (
+        3.0
+        * lstar
+        * L_SUN
+        * qpr
+        / (16.0 * np.pi * G_GRAV * mstar * M_SUN * C_LIGHT * density * G_CM3_TO_KG_M3 * beta)
+    )  # m
+    return size / UM
+
+
+def get_belt_profile(params):
+    """Read and validate a tabulated radial profile: radii in au, relative density."""
+    if "profile_file" in params:
+        radii, density = np.loadtxt(
+            params["profile_file"], comments="#", usecols=(0, 1), unpack=True, ndmin=2
+        )
+    elif "profile_r" in params and "profile_sigma" in params:
+        radii = np.atleast_1d(np.asarray(params["profile_r"], dtype=float))
+        density = np.atleast_1d(np.asarray(params["profile_sigma"], dtype=float))
+    else:
+        raise ValueError(
+            "An 'arbit' profile needs 'profile_file', or both 'profile_r' and "
+            "'profile_sigma'."
+        )
+
+    if radii.ndim != 1 or radii.shape != density.shape or radii.size < 2:
+        raise ValueError(
+            "The profile radii and densities must be 1D arrays of equal length "
+            "with at least two points."
+        )
+    if not (np.all(np.isfinite(radii)) and np.all(np.isfinite(density))):
+        raise ValueError("The profile contains non-finite values.")
+    if radii[0] <= 0.0 or np.any(np.diff(radii) <= 0.0):
+        raise ValueError("The profile radii must be positive and strictly increasing.")
+    if np.any(density < 0.0) or not np.any(density > 0.0):
+        raise ValueError("The profile densities must be non-negative and not all zero.")
+    return radii, density
+
+
+def make_belt_profile(params):
+    """
+    Extent and shape of one belt from a dictionary of parameters.
+
+    Parameters
+    ----------
+    spec : dict
+        ``dtype`` and its parameters (the same names as the single-belt model):
+
+        - "gauss": ``rpeak``, ``rfwhm`` (spans rpeak +/- 3 sigma);
+        - "onepl": ``rin``, ``rout``, ``alpha_out``;
+        - "twopl": ``rin``, ``rout``, ``rpeak``, ``alpha_in``, ``alpha_out``;
+        - "arbit": a table of radii (au) and relative surface number density,
+          given as ``profile_file`` (two columns) or ``profile_r`` with
+          ``profile_sigma``. The belt spans the table, or ``rin`` to ``rout``
+          within it, and the density is interpolated linearly.
+
+        ``nring`` is the number of annuli.
+
+    Returns
+    -------
+    rmin, rmax : float
+        Inner and outer edge in au.
+    nring : int
+        Number of annuli.
+    density : callable
+        Relative surface number density N(r) at radii in au. Its normalisation
+        is arbitrary.
+
+    """
+    dtype = params["dtype"]
+    nring = int(params["nring"])
+    if nring < 1:
+        raise ValueError(f"'nring' must be at least 1, got {nring!r}.")
+
+    match dtype:
+        case "gauss":
+            rpeak = params["rpeak"]
+            sigma = params["rfwhm"] / FWHM_PER_SIGMA
+            rmin, rmax = rpeak - 3.0 * sigma, rpeak + 3.0 * sigma
+            if rmin < 0.0:
+                rmin = 1.0
+
+            def density(radii):
+                return np.exp(-0.5 * ((radii - rpeak) / sigma) ** 2)
+
+        case "onepl":
+            rmin, rmax = spec["rin"], spec["rout"]
+            alpha = spec["alpha_out"]
+
+            def density(radii):
+                return (radii / rmin) ** alpha
+
+        case "twopl":
+            rmin, rmax = spec["rin"], spec["rout"]
+            rpeak, alpha, gamma = spec["rpeak"], spec["alpha_in"], spec["alpha_out"]
+
+            def density(radii):
+                return np.where(
+                    radii > rpeak, (radii / rpeak) ** gamma, (radii / rpeak) ** alpha
+                )
+
+        case "arbit":
+            table_r, table_density = get_belt_profile(params)
+            rmin = params.get("rin", table_r[0])
+            rmax = params.get("rout", table_r[-1])
+            if rmin < table_r[0] or rmax > table_r[-1]:
+                raise ValueError(
+                    f"rin and rout ({rmin!r}, {rmax!r} au) must lie within the "
+                    f"profile ({table_r[0]!r} to {table_r[-1]!r} au)."
+                )
+
+            def density(radii):
+                return np.interp(radii, table_r, table_density)
+
+        case _:
+            raise ValueError(
+                f"'dtype' must be one of {BELT_TYPES}, got {dtype!r}."
+            )
+
+    if not 0.0 < rmin < rmax:
+        raise ValueError(f"A belt needs 0 < rin < rout, got {rmin!r} and {rmax!r} au.")
+    return rmin, rmax, nring, density
+
 
 def mie_efficiencies(m, x):
     """
@@ -397,6 +571,24 @@ def calculate_luminosity(rstar, tstar):
     """
     lphot = (4.0 * np.pi * SIGMA_SB * (rstar * R_SUN) ** 2 * tstar**4) / L_SUN
     return lphot
+
+@jit
+def calculate_mass(lstar):
+    """Mass (solar) of a main-sequence star from its luminosity (inverts Salaris & Cassisi 2005).
+
+    L = 0.23 M^2.3 (M < 0.43), M^4 (0.43 <= M < 2), 1.4 M^3.5 (2 <= M < 55), 32000 M (M >= 55).
+    """
+    lum = np.atleast_1d(np.asarray(lstar, dtype=float))
+    mass = np.empty_like(lum)
+    low, mid_high = 0.23 * 0.43**2.3, 2.0**4  # luminosity at the segment boundaries (0.43 and 2 Msun)
+    top = 1.4 * 55.0**3.5
+    mass[lum < low] = (lum[lum < low] / 0.23) ** (1 / 2.3)
+    sel = (lum >= low) & (lum < mid_high)
+    mass[sel] = lum[sel] ** 0.25
+    sel = (lum >= mid_high) & (lum < top)
+    mass[sel] = (lum[sel] / 1.4) ** (1 / 3.5)
+    mass[lum >= top] = lum[lum >= top] / 32000.0
+    return mass
 
 
 class StarModel:
@@ -942,6 +1134,54 @@ class RTModel:
         self.sed_wave = wavelengths
         self.sed_star = photosphere
 
+
+    def calculate_blowout_size(self):
+        """
+        Radiation pressure blow-out size in um; see ``blowout_size``.
+
+        Uses ``lstar`` and ``mstar`` (solar units), ``density`` (g/cm3), and the
+        optional ``qpr`` (default 1) and ``beta_blowout`` (default 0.5). Sets and
+        returns self.ablow.
+
+        """
+        if "mstar" not in self.parameters and "lstar" not in self.parameters:
+            raise ValueError("Calculation of blowout size requires Lstar, Mstar.")
+            self.parameters["mstar"] = calculate_mass(self.parameters["lstar"])
+
+        elif "mstar" not in self.parameters and "lstar" in self.parameters:
+            warnings.warn("Warning: Mstar not provided, calculating from Lstar.")
+            lstar
+
+        self.ablow = blowout_size(
+            self.parameters["lstar"],
+            self.parameters["mstar"],
+            self.parameters["density"],
+            qpr=self.parameters.get("qpr", 1.0),
+            beta=self.parameters.get("beta_blowout", BETA_BLOWOUT),
+        )
+        return self.ablow
+
+    def _amin(self):
+        """Minimum grain size in um: ``parameters["amin"]``, or the blow-out size."""
+        amin = self.parameters["amin"]
+        if isinstance(amin, str):
+            if amin.strip().lower() != "blowout":
+                raise ValueError(f"'amin' must be a number or 'blowout', got {amin!r}.")
+            return self.calculate_blowout_size()
+
+        amin = float(amin)
+        if "mstar" in self.parameters:
+            ablow = self.calculate_blowout_size()
+            if amin < ablow:
+                warnings.warn(
+                    f"amin = {amin:g} um is below the blow-out size of {ablow:.3g} um; "
+                    "grains this small would be unbound. Use amin = 'blowout' to start "
+                    "the size distribution there.",
+                    stacklevel=3,
+                )
+        return amin
+
+
     def make_dust(self):
         """
         Calculate dust grain sizes, numbers, and masses, assuming a power law
@@ -960,6 +1200,15 @@ class RTModel:
         ngrain = int(self.parameters["ngrain"])
         mdust = self.parameters["mdust"]
         q = self.parameters["q"]
+
+        if amax <= amin:
+            raise ValueError(
+                f"amax ({amax!r} um) must exceed the minimum grain size ({amin!r} um)."
+            )
+
+        if q > 0:
+            warnings.warn("q must be negative, got {q!r}")
+            q *= -1
 
         grain_sizes = np.geomspace(amin, amax, num=ngrain)
 
@@ -1000,68 +1249,31 @@ class RTModel:
 
         The disc is split into ``nring`` equal-width annuli that tile the
         range between the inner and outer edge exactly. The radial profile is
-        the surface number density N(r) of Mueller (2007, Eq. 2.6), evaluated at
-        the annulus mid-points, and the number of grains in an annulus is
-        N(r) times its area (Eq. 2.17).
+        the surface number density N(r) evaluated at the annulus mid-points, and 
+        the number of grains in an annulus is N(r) times its area.
 
         Sets self.edges and self.radii (au), self.dr (au), self.areas (m^2) and
         self.scale (the fraction of all grains in each annulus; sums to one).
 
-        """
-        valid_types = ["gauss", "onepl", "twopl", "arbit"]
 
+        ``dtype`` is one of "gauss", "onepl", "twopl", an arbitrary tabulated
+        profile "arbit", or "multi" for several belts. See ``make_belt_profile`` for
+        the parameters of one belt and ``make_multi_belt_disc`` for several.
+        """
         dtype = self.parameters["dtype"]
 
-        match dtype:
-            case "gauss":
-                # Gaussian ring surface density model
-                rpeak = self.parameters["rpeak"]
-                rfwhm = self.parameters["rfwhm"]
-                nring = int(self.parameters["nring"])
+        if dtype not in BELT_TYPES:
+            raise ValueError(
+                f"Belt type needs to be one of {BELT_TYPES!r} ,got {dtype!r}."
+            )
 
-                lower = rpeak - 5.0 * (rfwhm / FWHM_PER_SIGMA)
-                upper = rpeak + 5.0 * (rfwhm / FWHM_PER_SIGMA)
+        if dtype == "multi":
+            self._make_multi_belt_profile()
+            return
 
-                alow = np.exp(-0.5 * ((lower - rpeak) / (rfwhm / FWHM_PER_SIGMA)) ** 2)
-                if alow > 0.01 and lower <= 1.0:
-                    warnings.warn(f"Warning: Disc amplitude is significant (> 1%) interor to {lower} au.")
-
-                edges, radii = ring_grid(lower, upper, nring)
-                rings = np.exp(-0.5 * ((radii - rpeak) / (rfwhm / FWHM_PER_SIGMA)) ** 2)
-
-            case "onepl":
-                # Single power law surface density model
-                rin = self.parameters["rin"]
-                rout = self.parameters["rout"]
-                alpha = self.parameters["alpha_out"]
-                nring = int(self.parameters["nring"])
-
-                edges, radii = ring_grid(rin, rout, nring)
-                rings = (radii / rin) ** alpha
-
-            case "twopl":
-                # Two power law surface density model
-                rin = self.parameters["rin"]
-                rout = self.parameters["rout"]
-                rpeak = self.parameters["rpeak"]
-                alpha = self.parameters["alpha_in"]
-                gamma = self.parameters["alpha_out"]
-                nring = int(self.parameters["nring"])
-
-                edges, radii = ring_grid(rin, rout, nring)
-                rings = (radii / rpeak) ** alpha
-                outer = np.where(radii > rpeak)
-                rings[outer] = (radii[outer] / rpeak) ** gamma
-
-            case "arbit":
-                raise NotImplementedError(
-                    "Arbitrary density distribution has not yet been implemented."
-                )
-
-            case _:
-                raise ValueError(
-                    f"'dtype' must be one of {valid_types}, got {dtype!r}."
-                )
+        rmin, rmax, nring, density = make_belt_profile(self.parameters)
+        edges, radii = ring_grid(rmin, rmax, nring)
+        rings = density(radii)
 
         self.edges = edges
         self.radii = radii
@@ -1070,6 +1282,98 @@ class RTModel:
 
         grains_per_ring = rings * self.areas  # N(r) * area, Eq. 2.17
         self.scale = grains_per_ring / np.sum(grains_per_ring)
+        self.belt_scale = self.scale[None, :]
+
+        self.edges = edges
+        self.radii = radii
+        self.dr = edges[1] - edges[0]
+        self.areas = np.pi * (edges[1:] ** 2 - edges[:-1] ** 2) * AU**2  # m^2
+
+        grains_per_ring = rings * self.areas  # N(r) * area, Eq. 2.17
+        self.scale = grains_per_ring / np.sum(grains_per_ring)
+
+
+    def _read_belts(self):
+        """The list of belt dictionaries from ``belts`` or the JSON ``belts_file``."""
+        if "belts" in self.parameters:
+            belts = self.parameters["belts"]
+        elif "belts_file" in self.parameters:
+            with open(self.parameters["belts_file"], encoding="utf-8") as f:
+                belts = json.load(f)
+        else:
+            raise ValueError(
+                "dtype 'multi' needs the belts: set 'belts' to a list of "
+                "dictionaries, or 'belts_file' to a JSON file holding that list."
+            )
+        if not isinstance(belts, (list, tuple)) or len(belts) == 0:
+            raise ValueError("'belts' must be a non-empty list of dictionaries.")
+        return list(belts)
+
+
+    def _make_multi_belt_profle(self):
+        """
+        Radial structure of a disc made of several belts.
+
+        Each belt is a dictionary with its own ``dtype`` ("gauss", "onepl",
+        "twopl" or "arbit") and parameters, see ``belt_profile``, plus an optional
+        ``mass`` giving its share of the dust (relative weights, default 1) and
+        ``nring`` (default ``DEFAULT_NRING``). All belts share the grain size
+        distribution, so a belt's share of the dust mass is also its share of the
+        grains.
+
+        The annuli come from the union of every belt's ring edges, so belts may
+        overlap or be separated by gaps; a gap is a single annulus that holds no
+        dust. Sets self.edges, self.radii, self.areas, self.scale (as for one belt;
+        self.dr is an array, as the annuli are not equally wide) and
+        self.belt_scale, the (nbelt, nring) fraction of all grains that each belt
+        puts in each annulus.
+
+        """
+        belts = self.read_belts()
+        profiles, weights, boundaries = [], [], []
+        for index, belt in enumerate(belts):
+            spec = dict(belt)
+            if spec.get("dtype") == "multi":
+                raise ValueError("A belt cannot itself be of dtype 'multi'.")
+            spec.setdefault("nring", DEFAULT_NRING)
+            try:
+                rmin, rmax, nring, density = belt_profile(spec)
+            except (KeyError, ValueError) as error:
+                raise ValueError(f"Belt {index}: {error}") from error
+
+            weight = float(spec.get("mass", 1.0))
+            if not np.isfinite(weight) or weight < 0.0:
+                raise ValueError(f"Belt {index}: 'mass' must be non-negative.")
+            profiles.append((rmin, rmax, density))
+            weights.append(weight)
+            boundaries.append(np.linspace(rmin, rmax, nring + 1))
+
+        weights = np.asarray(weights)
+        if weights.sum() <= 0.0:
+            raise ValueError("At least one belt needs a positive 'mass'.")
+        weights = weights / weights.sum()
+
+        edges = np.unique(np.concatenate(boundaries))
+        keep = np.concatenate(([True], np.diff(edges) > 1e-9 * edges[-1]))
+        edges = edges[keep]
+        radii = 0.5 * (edges[:-1] + edges[1:])
+        areas_au2 = np.pi * (edges[1:] ** 2 - edges[:-1] ** 2)
+
+        belt_scale = np.zeros((len(profiles), len(radii)))
+        for index, (rmin, rmax, density) in enumerate(profiles):
+            inside = (radii > rmin) & (radii < rmax)
+            grains = np.where(inside, density(radii), 0.0) * areas_au2
+            if not grains.sum() > 0.0:
+                raise ValueError(f"Belt {index} contains no dust.")
+            belt_scale[index] = weights[index] * grains / grains.sum()
+
+        self.edges = edges
+        self.radii = radii
+        self.dr = np.diff(edges)
+        self.areas = areas_au2 * AU**2  # m^2
+        self.belt_scale = belt_scale
+        self.scale = belt_scale.sum(axis=0)
+
 
     def calculate_surface_density(self):
         """
@@ -1132,7 +1436,7 @@ class RTModel:
                     case "spectrum" | "json":
                         # Scaling the observed flux by (d / R)^2 gives the surface
                         # flux, pi * B_lambda; dividing by pi gives the intensity
-                        # B_lambda used in the other branch (Mueller 2007, Eq. 2.29).
+                        # B_lambda used in the other branch.
                         dust_absr = np.trapezoid(
                             qabs
                             * self.sed_star
@@ -1253,9 +1557,8 @@ class RTModel:
         # Calculate emission
         for ii in range(int(self.parameters["nring"])):
             for ij in range(int(self.parameters["ngrain"])):
-                # Mueller (2007), Eq. 2.25 for the self.sigma[ii, ij] grains in the
-                # annulus: each grain of radius a emits 4 pi a^2 Q_abs pi B_lambda,
-                # so it contributes pi a^2 Q_abs B_lambda / d^2 to the flux at the
+                # Each grain of radius a emits 4 pi a^2 Q_abs pi B_lambda, so it
+                # contributes pi a^2 Q_abs B_lambda / d^2 to the flux at the
                 # observer.
                 scalefactor = (
                     MJY_PER_SI
