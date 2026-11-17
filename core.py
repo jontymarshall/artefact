@@ -574,7 +574,7 @@ def calculate_luminosity(rstar, tstar):
     lphot = (4.0 * np.pi * SIGMA_SB * (rstar * R_SUN) ** 2 * tstar**4) / L_SUN
     return lphot
 
-@jit
+@njit
 def calculate_mass(lstar):
     """Mass (solar) of a main-sequence star from its luminosity (inverts Salaris & Cassisi 2005).
 
