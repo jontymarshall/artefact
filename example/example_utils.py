@@ -79,12 +79,14 @@ def two_belt_parameters(
     rpeak_cold=80.0,
     fwhm_warm=2.0,
     fwhm_cold=30.0,
+    amin=2.0,
 ):
     """A F-type star at 30 pc with a warm inner belt and a cold outer belt.
 
     The belts share one grain size distribution; ``warm_fraction`` is the warm belt's
-    share of the total dust mass ``10**log_mdust`` (Earth masses). Each belt is a
-    Gaussian ring given by its peak radius and FWHM in au.
+    share of the total dust mass ``10**log_mdust`` (Earth masses), and ``amin`` is the
+    minimum grain size in um. Each belt is a Gaussian ring given by its peak radius
+    and FWHM in au.
     """
     return base_parameters(
         stype="blackbody",
@@ -92,7 +94,7 @@ def two_belt_parameters(
         rstar=1.6,
         lstar=4.0,
         dstar=30.0,
-        amin=2.0,
+        amin=amin,
         ngrain=31,
         nwav=120,
         q=q,
@@ -153,9 +155,6 @@ def run_model(
     model.make_dust()
     model.read_optical_constants()
     model.make_disc()
-    # A multi-belt disc has its own number of annuli (the union of each belt's edges),
-    # so tell the emission and scattering loops how many there really are.
-    model.parameters["nring"] = len(model.radii)
     model.calculate_surface_density()
     model.calculate_qabs()
     model.calculate_dust_scatter()

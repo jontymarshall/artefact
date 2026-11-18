@@ -1,7 +1,7 @@
 """Example 2: fit a model to photometry (HD 104860).
 
 Scales the photosphere to the optical/near-IR photometry, then fits the dust mass,
-grain size slope and belt radius to the infrared excess with lmfit. The thermal
+grain size slope, minimum grain size and belt radius to the infrared excess with lmfit. The thermal
 emission uses the quick blackbody-temperature mode during the fit and the full
 solution for the final model.
 
@@ -49,7 +49,7 @@ def parameters_for(theta):
         dstar=48.0,
         ngrain=31,
         nwav=120,
-        amin=4.3,
+        amin=theta["amin"],
         dtype="gauss",
         nring=21,
         rfwhm=60.0,
@@ -67,6 +67,7 @@ def main(show=True):
     params = lmfit.Parameters()
     params.add("log_mdust", value=-2.0, min=-5.0, max=0.0)
     params.add("q", value=-3.5, min=-4.5, max=-3.0)
+    params.add("amin", value=4.3, min=0.5, max=30.0)  # um, minimum grain size
     params.add("rpeak", value=110.0, min=20.0, max=250.0)
 
     def residual(theta):

@@ -2,7 +2,8 @@
 
 1. Model a star with a warm inner belt and a cold outer belt (``dtype="multi"``).
 2. Generate synthetic photometry from that model, then fit it back with lmfit to
-   recover the dust mass, size slope, warm-belt mass fraction and belt radii.
+   recover the dust mass, size slope, minimum grain size, warm-belt mass fraction
+   and belt radii.
 3. Image the best-fit system at wavelengths that pick out each belt.
 
 Run from anywhere:  python example/04_two_belt_system.py [--no-show]
@@ -28,7 +29,9 @@ WAVELENGTHS = np.array(
     [0.44, 0.55, 0.79, 1.25, 1.65, 2.2, 3.4, 4.6, 12.0, 22.0, 24.0, 70.0, 100.0, 160.0,
      450.0, 870.0, 1300.0]
 )
-TRUTH = dict(log_mdust=-1.3, q=-3.5, warm_fraction=0.02, rpeak_warm=5.0, rpeak_cold=80.0)
+TRUTH = dict(
+    log_mdust=-1.3, q=-3.5, amin=2.0, warm_fraction=0.02, rpeak_warm=5.0, rpeak_cold=80.0
+)
 
 
 def synthetic_photometry(seed=42):
@@ -57,6 +60,7 @@ def main(show=True):
     params = lmfit.Parameters()
     params.add("log_mdust", value=-1.0, min=-4.0, max=1.0)
     params.add("q", value=-3.6, min=-4.5, max=-3.0)
+    params.add("amin", value=4.0, min=0.5, max=20.0)  # um, minimum grain size
     params.add("warm_fraction", value=0.05, min=1e-4, max=0.5)
     params.add("rpeak_warm", value=4.0, min=2.0, max=15.0)  # keeps rpeak - 3 sigma > 0
     params.add("rpeak_cold", value=70.0, min=40.0, max=150.0)

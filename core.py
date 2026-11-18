@@ -853,15 +853,15 @@ class StarModel:
 
         if not mask.any():
             raise ValueError(f"No photometry between {lmin} and {lmax} um.")
-        if lobs[mask].min() < self.sed_wave[0] or lobs[mask].max() > self.sed_wave[-1]:
+        if lobs[mask].min() < self.wavelengths[0] or lobs[mask].max() > self.wavelengths[-1]:
             raise ValueError("Photometry to be fitted lies outside the model grid.")
 
-        model = (np.interp(lobs[mask], self.sed_wave, self.sed_star)
+        model = (np.interp(lobs[mask], self.wavelengths, self.photosphere)
                 * (lobs[mask] * UM) ** 2 / C_LIGHT)
 
         popt, _ = curve_fit(lambda x, a: a * x, model, fobs[mask], sigma=uobs[mask])
 
-        self.sed_star *= popt[0]
+        self.photosphere *= popt[0]
 
 
 class ModBBModel:
@@ -954,19 +954,27 @@ class ModBBModel:
         return self.parameters
 
     def make_star(self):
+        """
+        Create a stellar photosphere model in FLAM units.
+        Sets self.sed_wave and self.sed_star .
 
+        """
         self._in_fnu = False
 
         star = StarModel()
-        star = star.parse_star(self.parameters)
-        star = star.scale_star(lmin=SCALE_WAVE_MIN, lmax=SCALE_WAVE_MAX)
+        star.parameters = self.parameters
+        star.obs_wave = getattr(self, "obs_wave", None)
+        star.obs_flux = getattr(self, "obs_flux", None)
+        star.obs_uncs = getattr(self, "obs_uncs", None)
+        star.obs_band = getattr(self, "obs_band", None)
 
-        if stype == "phoenix":
+        star.parse_star(self.parameters)
+
+        if self.parameters["stype"] == "phoenix":
             self.parameters = self.parameters | star.parameters
 
-        self.sed_wave = wavelengths
-        self.sed_star = photosphere
-
+        self.sed_wave = star.wavelengths
+        self.sed_star = star.photosphere
 
     def calculate_modified_blackbody(self):
         """
@@ -1120,14 +1128,20 @@ class RTModel:
     def make_star(self):
         """
         Create a stellar photosphere model in FLAM units.
-        Sets self.sed_wave and self.sed_star .
+        Sets self.sed_wave and self.sed_star. Call ``scale_star`` afterwards to
+        scale it to the photometry.
 
         """
         self._in_fnu = False
 
         star = StarModel()
-        star = star.parse_star(self.parameters)
-        star = star.scale_star(lmin=SCALE_WAVE_MIN, lmax=SCALE_WAVE_MAX)
+        star.parameters = self.parameters
+        star.obs_wave = self.obs_wave
+        star.obs_flux = self.obs_flux
+        star.obs_uncs = self.obs_uncs
+        star.obs_band = self.obs_band
+
+        star.parse_star(self.parameters)
 
         if self.parameters["stype"] == "phoenix":
             self.parameters = self.parameters | star.parameters
@@ -1136,6 +1150,24 @@ class RTModel:
         self.sed_wave = star.wavelengths
         self.sed_star = star.photosphere
 
+    def scale_star(self, lmin=SCALE_WAVE_MIN, lmax=SCALE_WAVE_MAX):
+        """
+        Scale the photosphere to the observed photometry between ``lmin`` and
+        ``lmax`` um; see ``StarModel.scale_star``. Call before ``flam_to_fnu``.
+
+        """
+        star = StarModel()
+        star.wavelengths = self.sed_wave
+        star.photosphere = self.sed_star
+        star.obs_wave = self.obs_wave
+        star.obs_flux = self.obs_flux
+        star.obs_uncs = self.obs_uncs
+        star._in_fnu = self._in_fnu
+
+        star.scale_star(lmin=lmin, lmax=lmax)
+        
+        self.sed_wave = star.wavelengths
+        self.sed_star = star.photosphere
 
     def calculate_blowout_size(self):
         """
@@ -1152,7 +1184,7 @@ class RTModel:
 
         elif "mstar" not in self.parameters and "lstar" in self.parameters:
             warnings.warn("Warning: Mstar not provided, calculating from Lstar.")
-            self.parameters["mstar"] = calculate_mass(self.parameters["lstar"])
+            self.parameters["mstar"] = float(calculate_mass(self.parameters["lstar"])[0])
 
         self.ablow = blowout_size(
             self.parameters["lstar"],
@@ -1204,7 +1236,7 @@ class RTModel:
         q = self.parameters["q"]
 
         if amin == "blowout":
-            amin = _amin()
+            amin = self._amin()
 
         if amax <= amin:
             raise ValueError(
@@ -1334,7 +1366,7 @@ class RTModel:
         puts in each annulus.
 
         """
-        belts = _read_belts()
+        belts = self._read_belts()
         profiles, weights, boundaries = [], [], []
         for index, belt in enumerate(belts):
             spec = dict(belt)
@@ -1512,13 +1544,13 @@ class RTModel:
         self.sed_scat = np.zeros(int(self.parameters["nwav"]))
         self.sed_rings = np.zeros(
             (
-                int(self.parameters["nring"]),
+                len(self.radii),
                 int(self.parameters["ngrain"]),
                 int(self.parameters["nwav"]),
             )
         )
 
-        for ii in range(int(self.parameters["nring"])):
+        for ii in range(len(self.radii)):
             for ij in range(int(self.parameters["ngrain"])):
                 scalefactor = (
                     self.qsca[ij, :]
@@ -1545,13 +1577,13 @@ class RTModel:
         """
 
         self.tdust = np.zeros(
-            (int(self.parameters["nring"]), int(self.parameters["ngrain"]))
+            (len(self.radii), int(self.parameters["ngrain"]))
         )
 
         self.sed_emit = np.zeros(int(self.parameters["nwav"]))
         self.sed_ringe = np.zeros(
             (
-                int(self.parameters["nring"]),
+                len(self.radii),
                 int(self.parameters["ngrain"]),
                 int(self.parameters["nwav"]),
             )
@@ -1560,7 +1592,7 @@ class RTModel:
         dstar_m = self.parameters["dstar"] * PC
 
         # Calculate emission
-        for ii in range(int(self.parameters["nring"])):
+        for ii in range(len(self.radii)):
             for ij in range(int(self.parameters["ngrain"])):
                 # Each grain of radius a emits 4 pi a^2 Q_abs pi B_lambda, so it
                 # contributes pi a^2 Q_abs B_lambda / d^2 to the flux at the

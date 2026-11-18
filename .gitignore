@@ -3,3 +3,7 @@
 #Python
 __pycache__
 artefact.egg-info
+.ipynb_checkpoints/
+#Output files
+*.png
+*.fits
