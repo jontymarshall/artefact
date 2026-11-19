@@ -741,7 +741,7 @@ class StarModel:
             Photospheric flux density in W/m2/m in ascending order.
 
         """
-        path = data_path("stellar_models", self.parameters["model"], suffixes=("", ".spec", ".tbl"))
+        path = data_path("stellar_models", self.parameters["model"], suffixes=("", ".npz", ".tbl", ".txt"))
 
         model_waves, model_spect = np.loadtxt(
             path, comments="#", usecols=(0, 1), unpack=True

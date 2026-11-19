@@ -14,9 +14,13 @@ If you use artefact in your research, please cite Marshall et al. (2023) (https:
 git clone https://github.com/jontymarshall/artefact.git
 cd artefact
 pip install -e .
+pytest
+pdoc 
 ```
 
 ## Quickstart ##
+
+The examples directory contains Python scripts (or notebooks directory for equivalent Jupyter notebooks) with workflows for several common usecases with artefact. Detailed API documentation can be found in the docs directory.
 
 ## Repository Overview ##
 
@@ -42,7 +46,7 @@ artefact/                       <- repository root
 │       ├── image.py
 │       ├── fitting.py
 │       ├── phoenix.py
-│       ├── _data.py            <- data_path() resolver (see below)
+│       ├── _data.py            <- data_path() resolver
 │       └── data/
 │           ├── filters.yaml
 │           ├── filters/*.csv

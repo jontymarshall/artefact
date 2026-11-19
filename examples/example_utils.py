@@ -29,7 +29,7 @@ EXAMPLE = Path(__file__).resolve().parents[1]
 OUTPUT = EXAMPLE / "output"
 
 # RTModel appends ".lnk" to ``composition`` itself, so no extension here.
-G2V_SPECTRUM = data_path("stellar_models", self.parameters["model"], suffixes=("",))
+G2V_SPECTRUM = data_path("stellar_models", self.parameters["model"], suffixes=("",".npz",".tbl",".txt",))
 ASTROSIL = data_path("optical_constants", self.parameters["composition"], suffixes=(".lnk",))
 
 
