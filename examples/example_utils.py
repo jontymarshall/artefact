@@ -7,30 +7,25 @@ The helpers only wrap the public ``RTModel`` workflow so the examples stay short
     belt_sed()         split a multi-belt model into the SED of each belt
     model_at()         interpolate a model SED onto observed wavelengths
 
-Paths are resolved relative to the repository, so the examples work from any
-working directory.
+Paths are resolved relative to this file, so the examples work from any working
+directory. The dust and stellar models are the ones bundled with artefact, given by
+bare name (see ``artefact.list_data``); the package must be installed.
 """
 
-import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ._data import data_path
+from artefact import RTModel
 
-try:
-    from artefact import RTModel
-except ImportError:  # not pip-installed: the repository directory *is* the package
-    sys.path.insert(0, str(REPO.parent))
-    from artefact import RTModel
-
-EXAMPLE = Path(__file__).resolve().parents[1]
+EXAMPLE = Path(__file__).resolve().parent
 OUTPUT = EXAMPLE / "output"
 
-# RTModel appends ".lnk" to ``composition`` itself, so no extension here.
-G2V_SPECTRUM = data_path("stellar_models", self.parameters["model"], suffixes=("",".npz",".tbl",".txt",))
-ASTROSIL = data_path("optical_constants", self.parameters["composition"], suffixes=(".lnk",))
+# Bare names of bundled files: RTModel appends ".lnk" to ``composition`` itself.
+ASTROSIL = "astrosil"
+G2V_SPECTRUM = "G2V_spectrum.npz"
+A0V_SPECTRUM = "A0V_spectrum.npz"
 
 
 def base_parameters(**overrides):

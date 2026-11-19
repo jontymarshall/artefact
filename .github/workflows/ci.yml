@@ -70,7 +70,7 @@ jobs:
 
           expected = {
               "optical_constants": {"astrosil.lnk"},
-              "stellar_models": {"G2V_spectrum.txt", "A0V_spectrum.txt", "phoenix_grid.npz"},
+              "stellar_models": {"G2V_spectrum.npz", "A0V_spectrum.npz", "phoenix_grid.npz"},
           }
           for kind, names in expected.items():
               missing = names - set(artefact.list_data(kind))

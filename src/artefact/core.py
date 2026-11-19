@@ -9,6 +9,7 @@ distributions and a power-law grain size distribution.
 import json
 import warnings
 from dataclasses import dataclass
+from pathlib import Path
 
 import astropy.constants as const
 import miepython as mpy
@@ -731,7 +732,10 @@ class StarModel:
         Read in a stellar photosphere model from the SVO database.
 
         Stellar photosphere model is assumed to have wavelengths in Angstroms,
-        and flux density in erg/s/cm^2/A.
+        and flux density in erg/s/cm^2/A. The file is either a plain text table
+        (wavelength, flux) or a NumPy ``.npz`` archive with arrays ``wavelength``
+        and ``flux`` in the same units, as the bundled spectra are; see
+        ``contrib/svo_to_npz.py`` to convert a table.
 
         Returns
         -------
@@ -743,9 +747,14 @@ class StarModel:
         """
         path = data_path("stellar_models", self.parameters["model"], suffixes=("", ".npz", ".tbl", ".txt"))
 
-        model_waves, model_spect = np.loadtxt(
-            path, comments="#", usecols=(0, 1), unpack=True
-        )
+        if Path(path).suffix == ".npz":
+            with np.load(path) as archive:
+                model_waves = np.array(archive["wavelength"], dtype=float)
+                model_spect = np.array(archive["flux"], dtype=float)
+        else:
+            model_waves, model_spect = np.loadtxt(
+                path, comments="#", usecols=(0, 1), unpack=True
+            )
 
         model_waves *= 1e-4  # Angstrom -> um
         model_spect *= CGS_FLAM_TO_SI  # W/m2/m
@@ -921,6 +930,7 @@ class ModBBModel:
         self.adust = None # scaling factor for emission in au**2
         self.lam0  = None # break wavelength for modified blackbody emission
         self.beta  = None # modified blacbody emission exponent beyond lam0
+        self.flum  = None # fractional luminosity of modified blackbody component
 
         # Scaling
         self._in_fnu = False
@@ -976,17 +986,17 @@ class ModBBModel:
         self.sed_wave = star.wavelengths
         self.sed_star = star.photosphere
 
-    def calculate_modified_blackbody(self,frac_lum=None):
+    def calculate_modified_blackbody(self):
         """
         Calculate scaled modified blackbody emission profile for dust emission.
         Can scale by an arbitrary factor, or the fractional luminosity of the
         component.
         """
 
-        if frac_lum not None:
+        if self.flum is not None:
             modbb   = modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
             raw_fl  = np.trapezoid(modbb,x=self.sed_wave) / np.trapezoid(self.sed_star,x=self.sed_wave)
-            self.sed_modbb = ( frac_lum / raw_fl ) * mod_bb 
+            self.sed_modbb = ( frac_lum / raw_fl ) * modbb 
         else:
             self.sed_modbb = (self.adust*AU**2)*modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
 

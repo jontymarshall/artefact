@@ -165,10 +165,10 @@ def test_planck_lam_rayleigh_jeans_limit():
     assert art.planck_lam(wav, temperature) == rel(rayleigh_jeans, 1e-3)
 
 
-def test_calc_luminosity_solar_values_and_scaling():
-    assert art.calc_luminosity(1.0, 5772.0) == rel(1.0, 2e-3)
-    assert art.calc_luminosity(2.0, 5772.0) == rel(4.0 * art.calc_luminosity(1.0, 5772.0))
-    assert art.calc_luminosity(1.0, 2 * 5772.0) == rel(16.0 * art.calc_luminosity(1.0, 5772.0))
+def test_calculate_luminosity_solar_values_and_scaling():
+    assert art.calculate_luminosity(1.0, 5772.0) == rel(1.0, 2e-3)
+    assert art.calculate_luminosity(2.0, 5772.0) == rel(4.0 * art.calculate_luminosity(1.0, 5772.0))
+    assert art.calculate_luminosity(1.0, 2 * 5772.0) == rel(16.0 * art.calculate_luminosity(1.0, 5772.0))
 
 
 def test_unit_conversion_constants():
@@ -182,7 +182,7 @@ def test_physics_helpers_are_reachable_from_the_class():
     expected = art.planck_lam(1e-6, 300.0)
     assert RTModel.planck_lam(1e-6, 300.0) == expected
     assert RTModel().planck_lam(1e-6, 300.0) == expected  # works on an instance too
-    assert RTModel.calc_luminosity(1.0, 5772.0) == art.calc_luminosity(1.0, 5772.0)
+    assert RTModel.calculate_luminosity(1.0, 5772.0) == art.calculate_luminosity(1.0, 5772.0)
 
 
 def test_extrapolate_wavelengths_continues_as_rayleigh_jeans():

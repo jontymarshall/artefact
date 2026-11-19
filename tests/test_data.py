@@ -24,8 +24,8 @@ from artefact._data import DATA_DIR, KINDS, data_path, list_data
 EXPECTED = {
     "optical_constants": ["astrosil.lnk"],
     "stellar_models": [
-        "A0V_spectrum.txt",
-        "G2V_spectrum.txt",
+        "A0V_spectrum.npz",
+        "G2V_spectrum.npz",
         "phoenix_grid.npz",
         "phoenix_grid.sha256",
     ],
@@ -191,12 +191,46 @@ def test_optical_constants_missing_file_names_the_bundled_ones(tmp_path, monkeyp
 def test_read_star_with_a_bundled_spectrum(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     star = art.StarModel()
-    star.parameters = {"model": "G2V_spectrum.txt"}
+    star.parameters = {"model": "G2V_spectrum.npz"}
     waves, spectrum = star.read_star()
 
     assert waves.min() < 0.5 < 5.0 < waves.max()  # wavelengths are in um
-    assert np.all(np.diff(waves) > 0)
+    assert np.all(np.diff(waves) >= 0)  # non-decreasing: the SVO tables repeat some points
     assert np.all(spectrum >= 0)
+
+    # the extension may be left off
+    star.parameters = {"model": "G2V_spectrum"}
+    waves_again, spectrum_again = star.read_star()
+    assert np.array_equal(waves, waves_again)
+    assert np.array_equal(spectrum, spectrum_again)
+
+
+@pytest.mark.parametrize("name", ["G2V_spectrum", "A0V_spectrum"])
+def test_bundled_spectra_are_complete_physical_models(name):
+    star = art.StarModel()
+    star.parameters = {"model": name}
+    waves, spectrum = star.read_star()
+
+    assert len(waves) == len(spectrum) > 100_000
+    assert waves.min() < 0.01 and waves.max() > 1000.0  # um: UV to far-IR
+    assert np.all(np.isfinite(waves)) and np.all(np.isfinite(spectrum))
+    assert spectrum.max() > 0.0
+
+
+def test_read_star_npz_matches_the_text_table(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    wave_angstrom = np.array([1e3, 1e4, 1e5, 1e6])
+    flux = np.array([3.0, 2.0, 1.0, 0.5])
+    np.savetxt(tmp_path / "table.txt", np.c_[wave_angstrom, flux])
+    np.savez(tmp_path / "table.npz", wavelength=wave_angstrom, flux=flux)
+
+    from_text = art.StarModel()
+    from_text.parameters = {"model": "table.txt"}
+    from_npz = art.StarModel()
+    from_npz.parameters = {"model": "table.npz"}
+
+    for a, b in zip(from_text.read_star(), from_npz.read_star(), strict=True):
+        assert np.array_equal(a, b)
 
 
 def test_read_star_with_a_local_spectrum(tmp_path, monkeypatch):

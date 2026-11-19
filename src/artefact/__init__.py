@@ -132,6 +132,12 @@ from .phoenix import (
 )
 
 
+from ._data import (
+    data_path,
+    list_data,
+)
+
+
 # public API
 __all__ = [
     "ModelImage",
@@ -146,10 +152,10 @@ __all__ = [
     "disc_mass_three_slope",
     "disc_surface_brightness",
     "extrapolate_wavelengths",
-    "henyey_greenstein",
     "planck_lam",
     "planck_nu",
     "ring_grid",
+    "henyey_greenstein",
     "two_component_hg",
     "__version__",
 ]

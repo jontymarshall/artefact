@@ -15,7 +15,7 @@ lstar       : 1.0 #lstar in L_Sol
 rstar       : 1.0 #rstar in R_Sol
 tstar       : 5770.0 #tstar in K
 dstar       : 10.0 #dstar in pc
-model       : G2V_spectrum.txt #photosphere model filename
+model       : G2V_spectrum.npz #photosphere model filename (bundled, or your own .txt/.npz)
 #disc properties
 dtype       : onepl #dtype one of 'onepl', 'twopl', 'gauss'
 nring       : 101 #number of annuli in the disc model
