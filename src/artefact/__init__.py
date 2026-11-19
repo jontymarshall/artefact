@@ -25,12 +25,10 @@ __license__ = "GNU GPL V3"
 __url__ = "https://github.com/jontymarshall/artefact"
 
 # package contents
-from ._data import (
-    data_path,
-    list_data,
-)
+# Stellar-fit settings (priors, sample counts, ...) are not re-exported here;
+# import them from :mod:`artefact.phoenix`.
+from ._data import data_path, list_data
 from .core import (
-    # physical constants (SI) and unit conversions
     AU,
     C_LIGHT,
     CGS_FLAM_TO_SI,
@@ -43,7 +41,6 @@ from .core import (
     M_EARTH,
     MJY_PER_SI,
     PC,
-    # model defaults
     Q_BIG,
     Q_MED,
     R_SUN,
@@ -59,14 +56,11 @@ from .core import (
     UM,
     ModBBModel,
     RTModel,
-    # model and image classes
     StarModel,
-    # stellar and dust helpers
     calculate_luminosity,
     calculate_rbb,
     calculate_rre,
     calculate_tbb,
-    # disc mass
     disc_mass_three_slope,
     extrapolate_wavelengths,
     modified_blackbody,
@@ -74,15 +68,8 @@ from .core import (
     planck_nu,
     ring_grid,
 )
-from .fitting import (
-    BandResponse,
-    FilterCurve,
-    Photometer,
-    band_weights,
-    read_filter,
-)
+from .fitting import BandResponse, FilterCurve, Photometer, band_weights, read_filter
 from .image import (
-    # model defaults
     ARCSEC_PER_DEG,
     ASPECT_RATIO,
     HG_G1,
@@ -91,37 +78,19 @@ from .image import (
     MIN_ASPECT,
     MIN_INC,
     ModelImage,
-    # imaging
     convolve_beam,
     disc_surface_brightness,
     henyey_greenstein,
     two_component_hg,
 )
 from .phoenix import (
-    ERROR_FLOOR,
-    FEH_PRIOR,
-    # model constants
-    L_SUN_W,
-    LOGG_PRIOR,
-    MIN_STELLAR_POINTS,
-    MISSING_ERROR_FRACTION,
-    # model defaults
-    NO_EXTINCTION_WITHIN_PC,
-    PARSEC_M,
-    R_SUN_M,
-    RV,
-    SAMPLES,
-    STELLAR_MAX_UM,
-    STELLAR_MIN_UM,
     PhoenixGrid,
     Quantity,
     StellarFit,
     build_grid,
     effective_errors,
-    # star functions
     extinction_av,
     fit_star,
-    # grid functions
     load_grid,
     main_sequence_mass,
     percentile_errors,
@@ -133,22 +102,84 @@ from .phoenix import (
 
 # public API
 __all__ = [
-    "ModelImage",
+    "__version__",
+    # physical constants (SI) and unit conversions
+    "AU",
+    "C_LIGHT",
+    "CGS_FLAM_TO_SI",
+    "FWHM_PER_SIGMA",
+    "FWHM_TO_SIGMA",
+    "G_CM3_TO_KG_M3",
+    "H_PLANCK",
+    "K_B",
+    "L_SUN",
+    "M_EARTH",
+    "MJY_PER_SI",
+    "PC",
+    "R_SUN",
+    "SI_PER_MJY",
+    "SIGMA_SB",
+    "T_CMB",
+    "UM",
+    # model defaults
+    "Q_BIG",
+    "Q_MED",
+    "S_KM",
+    "S_MAX",
+    "S_MM",
+    "SCALE_WAVE_MAX",
+    "SCALE_WAVE_MIN",
+    "T_BB_1AU",
+    "ARCSEC_PER_DEG",
+    "ASPECT_RATIO",
+    "HG_G1",
+    "HG_G2",
+    "HG_WEIGHT",
+    "MIN_ASPECT",
+    "MIN_INC",
+    # models and images
+    "RTModel",
     "StarModel",
     "ModBBModel",
-    "RTModel",
+    "ModelImage",
+    # bundled data
+    "data_path",
+    "list_data",
+    # physics helpers
     "calculate_luminosity",
-    "calculate_tbb",
     "calculate_rbb",
     "calculate_rre",
-    "convolve_beam",
+    "calculate_tbb",
     "disc_mass_three_slope",
-    "disc_surface_brightness",
     "extrapolate_wavelengths",
+    "modified_blackbody",
     "planck_lam",
     "planck_nu",
     "ring_grid",
+    # imaging
+    "convolve_beam",
+    "disc_surface_brightness",
     "henyey_greenstein",
     "two_component_hg",
-    "__version__",
+    # synthetic photometry
+    "BandResponse",
+    "FilterCurve",
+    "Photometer",
+    "band_weights",
+    "read_filter",
+    # stellar fitting (PHOENIX grid)
+    "PhoenixGrid",
+    "Quantity",
+    "StellarFit",
+    "build_grid",
+    "effective_errors",
+    "extinction_av",
+    "fit_star",
+    "load_grid",
+    "main_sequence_mass",
+    "percentile_errors",
+    "sample_covariance",
+    "save_grid",
+    "stellar_luminosity_lsun",
+    "verify_shipped_grid",
 ]
