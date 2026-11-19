@@ -18,10 +18,11 @@ import numpy as np
 from lmfit import Parameters, minimize
 
 from .fitting import Photometer
+from ._data import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-MODEL_DIR = Path(__file__).resolve().parent / "data" / "stellar_models"
+MODEL_DIR = DATA_DIR / "stellar_models"
 PHOENIX_DIR = MODEL_DIR / "phoenix"  # the full PHOENIX model files, only needed to rebuild the grid
 # a grid rebuilt from the model files; kept apart from the committed copy so that copy is always checksummed
 CACHE_PATH = MODEL_DIR / "phoenix_grid_cache.npz"

@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install ruff
+      - run: ruff check .
+      # Enable once the code base has been through `ruff format`:
+      # - run: ruff format --check .
+
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test]"
+      - run: python -m pytest
+
+  package:
+    # Build the sdist and wheel, then use the *installed wheel* from outside the
+    # repository: this is what catches missing data files and cwd-relative paths.
+    name: build and smoke-test the wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+
+      - name: Install the wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install dist/*.whl matplotlib
+      - name: Bundled data is in the wheel
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" - <<'PY'
+          import artefact
+
+          expected = {
+              "optical_constants": {"astrosil.lnk"},
+              "stellar_models": {"G2V_spectrum.txt", "A0V_spectrum.txt", "phoenix_grid.npz"},
+          }
+          for kind, names in expected.items():
+              missing = names - set(artefact.list_data(kind))
+              assert not missing, f"{kind}: missing {missing}"
+          assert artefact.list_data("filters"), "no filter curves in the wheel"
+          print("artefact", artefact.__version__, "data OK")
+          PY
+      - name: Run an example from outside the repository
+        working-directory: ${{ runner.temp }}
+        env:
+          MPLBACKEND: Agg
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" "$GITHUB_WORKSPACE/examples/01_sed_single_belt.py" --no-show
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

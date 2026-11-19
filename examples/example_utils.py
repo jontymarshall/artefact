@@ -17,21 +17,20 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[1]
+from ._data import data_path
+
 try:
     from artefact import RTModel
 except ImportError:  # not pip-installed: the repository directory *is* the package
     sys.path.insert(0, str(REPO.parent))
     from artefact import RTModel
 
-DATA = REPO / "data"
-EXAMPLE = REPO / "example"
-OUTPUT = REPO / "example" / "output"
+EXAMPLE = Path(__file__).resolve().parents[1]
+OUTPUT = EXAMPLE / "output"
 
 # RTModel appends ".lnk" to ``composition`` itself, so no extension here.
-ASTROSIL = str(DATA / "optical_constants" / "astrosil")
-G2V_SPECTRUM = str(DATA / "stellar_models" / "G2V_spectrum.txt")
-A0V_SPECTRUM = str(DATA / "stellar_models" / "A0V_spectrum.txt")
+G2V_SPECTRUM = data_path("stellar_models", self.parameters["model"], suffixes=("",))
+ASTROSIL = data_path("optical_constants", self.parameters["composition"], suffixes=(".lnk",))
 
 
 def base_parameters(**overrides):

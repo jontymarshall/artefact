@@ -30,7 +30,7 @@ from .image import (
     two_component_hg,
 )
 from .phoenix import FEH_PRIOR, LOGG_PRIOR, fit_star, load_grid
-
+from ._data import data_path
 
 # Physical constants (SI units)
 G_GRAV = const.G.value # 6.6743e-11 m^3 / kg / s^2
@@ -713,7 +713,7 @@ class StarModel:
             Photospheric flux density in W/m2/m in ascending order.
 
         """
-        spectrum_file = self.parameters["model"]
+        spectrum_file = data_path("stellar_models", self.parameters["model"], suffixes=("", ".json",))
 
         with open(spectrum_file) as spec_file:
             data = json.load(spec_file)
@@ -741,7 +741,7 @@ class StarModel:
             Photospheric flux density in W/m2/m in ascending order.
 
         """
-        path = self.parameters["model"]
+        path = data_path("stellar_models", self.parameters["model"], suffixes=("", ".spec", ".tbl"))
 
         model_waves, model_spect = np.loadtxt(
             path, comments="#", usecols=(0, 1), unpack=True
@@ -976,12 +976,19 @@ class ModBBModel:
         self.sed_wave = star.wavelengths
         self.sed_star = star.photosphere
 
-    def calculate_modified_blackbody(self):
+    def calculate_modified_blackbody(self,frac_lum=None):
         """
         Calculate scaled modified blackbody emission profile for dust emission.
+        Can scale by an arbitrary factor, or the fractional luminosity of the
+        component.
         """
 
-        self.sed_modbb = (self.adust*AU**2)*modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
+        if frac_lum not None:
+            modbb   = modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
+            raw_fl  = np.trapezoid(modbb,x=self.sed_wave) / np.trapezoid(self.sed_star,x=self.sed_wave)
+            self.sed_modbb = ( frac_lum / raw_fl ) * mod_bb 
+        else:
+            self.sed_modbb = (self.adust*AU**2)*modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
 
     def calculate_radii(self):
         """
@@ -1270,7 +1277,7 @@ class RTModel:
         Read in (n,k) optical constants from a text file into self.oc_nk.
 
         """
-        path = self.parameters["composition"] + ".lnk"
+        path = data_path("optical_constants", self.parameters["composition"], suffixes=(".lnk",))
 
         dl, dn, dk = np.loadtxt(path, comments="#", usecols=(0, 1, 2), unpack=True)
 

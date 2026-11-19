@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "artefact"
-dynamic = ["version"]  # single source of truth: __version__ in artefact.py
+dynamic = ["version"]
 description = "A 1D radiative transfer model for optically thin dust discs around stars"
 readme = "README.md"
-requires-python = ">=3.10"  # artefact.py uses `match` statements
+requires-python = ">=3.10"
 license = "GPL-3.0-only"
 authors = [{ name = "Jonathan P. Marshall" }, 
            { name = "Robin Young" }, 
@@ -17,12 +17,9 @@ authors = [{ name = "Jonathan P. Marshall" },
 maintainers = [{ name = "Jonathan P. Marshall"}
 ]
 keywords = [
-    "astronomy",
     "astrophysics",
     "debris disc",
     "radiative transfer",
-    "dust",
-    "spectral energy distribution",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -36,8 +33,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
     "Topic :: Scientific/Engineering :: Physics",
 ]
-# Lower bounds are set by NumPy 2 support: artefact.py calls np.trapezoid
-# (added in NumPy 2.0), and the other libraries need releases built for NumPy 2.
 dependencies = [
     "numpy>=2.0",
     "scipy>=1.13",
@@ -51,26 +46,22 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
 dev = ["artefact[test]", "ruff>=0.6"]
+examples = ["corner", "emcee", "jupyter", "matplotlib"]
 
 [project.urls]
 Homepage = "https://github.com/jontymarshall/artefact"
 Issues = "https://github.com/jontymarshall/artefact/issues"
 Paper = "https://doi.org/10.1093/mnras/stad913"
 
-[tool.setuptools]
-# The repository root is the package itself (__init__.py, core.py, ... at the top level).
-packages = ["artefact"]
-package-dir = { "artefact" = "." }
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
-"artefact" = ["data/filters.yaml", 
-              "data/filters/*.csv",
-              "data/optical_constants/astrosil.lnk",
-              "data/stellar_models/*"]
+artefact = ["data/**/*", "py.typed"]
 
 [tool.setuptools.dynamic]
-# Read statically from the source, so building does not import numba/astropy.
 version = { attr = "artefact.__version__" }
+
 
 # ---------------------------------------------------------------------------
 # Tests: `pip install -e ".[test]"` then `pytest`
@@ -78,7 +69,6 @@ version = { attr = "artefact.__version__" }
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-# The package is the repository root, so it must be installed (`pip install -e .`) to be imported.
 addopts = "-ra"
 filterwarnings = [
     "error::SyntaxWarning:artefact",  # e.g. invalid escape sequences, `is` with a literal
@@ -105,8 +95,3 @@ ignore = [
     "N803",  # argument names such as `T` (temperature) are conventional in physics code
     "N806",  # likewise for local variables
 ]
-
-[tool.ruff.lint.per-file-ignores]
-# The BibTeX entry in __citation__ contains very long lines; consider moving it
-# to a CITATION.cff file and dropping this exception.
-"tests/*" = ["E501"]

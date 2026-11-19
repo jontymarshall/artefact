@@ -1,0 +1,69 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: artefact
+message: 'If you use this software, please cite the following paper.'
+type: software
+authors:
+  - given-names: Jonathan
+    name-particle: P.
+    family-names: Marshall
+    orcid: 'https://orcid.org/0000-0001-6208-1801'
+  - given-names: Shane
+    family-names: Hengst
+    orcid: 'https://orcid.org/0000-0001-7008-6602'
+  - given-names: Robin
+    family-names: Young
+repository-code: 'https://github.com/jontymarshall/artefact'
+abstract: >-
+  The artefact package is a 1D radiative transfer code
+  written in Python to model the optically thin emission of
+  axisymmetric debris discs using parametric dust grain size
+  distribution and disc architecture. The package comes with
+  tools to help model not only the spectral energy
+  distribution but also the related scattered light and
+  thermal emission from the disc.
+keywords:
+  - astrophysics
+  - radiative transfer
+  - debris disc
+license: GPL-3.0-only
+version: 0.3.0
+date-released: '2026-11-19'
+preferred-citation:
+  type: article
+  title: 'Stirred but not shaken: a multiwavelength view of HD 16743''s debris disc'
+  authors:
+    - family-names: Marshall
+      given-names: Jonathan P.
+    - family-names: Milli
+      given-names: J.
+    - family-names: Choquet
+      given-names: E.
+    - family-names: del Burgo
+      given-names: C.
+    - family-names: Kennedy
+      given-names: G. M.
+    - family-names: Kemper
+      given-names: F.
+    - family-names: Wyatt
+      given-names: M. C.
+    - family-names: Kral
+      given-names: Q.
+    - family-names: Soummer
+      given-names: R.
+  journal: "Monthly Notices of the Royal Astronomical Society"
+  volume: 521
+  issue: 4
+  start: 5940
+  end: 5951
+  year: 2023
+  month: 6
+  doi: 10.1093/mnras/stad913
+  keywords:
+    - planet-disc interactions
+    - circumstellar matter
+    - 'stars: individual: HD 16743'
+    - 'radio continuum: planetary systems'
+    - Astrophysics - Earth and Planetary Astrophysics

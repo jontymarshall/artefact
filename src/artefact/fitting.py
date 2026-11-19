@@ -25,7 +25,9 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+from ._data import DATA_DIR
+
+
 FILTER_DIR = DATA_DIR / "filters"
 DEFAULT_MAPPING_PATH = DATA_DIR / "filters.yaml"
 MAX_SAMPLES = (

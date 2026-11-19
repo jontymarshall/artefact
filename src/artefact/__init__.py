@@ -17,28 +17,11 @@ import takes a few seconds while numba loads.
 """
 # metadata
 __author__ = "Jonathan P. Marshall"
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __copyright__ = "2023-26, Jonathan P. Marshall"
 __email__ = ""
 __license__ = "GNU GPL V3"
 __url__ = "https://github.com/jontymarshall/artefact"
-__citation__ = r"""@ARTICLE{2023MNRAS.521.5940M,
-    author = {{Marshall}, Jonathan P. and {Milli}, J. and {Choquet}, E. and {del Burgo}, C. and {Kennedy}, G.~M. and {Kemper}, F. and {Wyatt}, M.~C. and {Kral}, Q. and {Soummer}, R.},
-    title = '{Stirred but not shaken: a multiwavelength view of HD 16743's debris disc}',
-    journal = {\mnras},
-    keywords = {planet-disc interactions, circumstellar matter, stars: individual: HD 16743, radio continuum: planetary systems, Astrophysics - Earth and Planetary Astrophysics},
-    year = 2023,
-    month = jun,
-    volume = {521},
-    number = {4},
-    pages = {5940-5951},
-    doi = {10.1093/mnras/stad913},
-    archivePrefix = {arXiv},
-    eprint = {2303.17128},
-    primaryClass = {astro-ph.EP},
-    adsurl = {https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.5940M},
-    adsnote = {Provided by the SAO/NASA Astrophysics Data System}
-}"""
 
 # package contents
 from .core import (

@@ -1,0 +1,6 @@
+graft tests 
+graft examples 
+graft notebooks 
+graft docs
+prune examples/output
+global-exclude *~ *.py[cod] *.so .DS_Store
