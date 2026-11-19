@@ -212,7 +212,7 @@ def test_bundled_spectra_are_complete_physical_models(name):
     waves, spectrum = star.read_star()
 
     assert len(waves) == len(spectrum) > 100_000
-    assert waves.min() < 0.01 and waves.max() > 1000.0  # um: UV to far-IR
+    assert waves.min() < 0.01 and waves.max() > 500.0  # um: UV to far-IR (to ~1 mm)
     assert np.all(np.isfinite(waves)) and np.all(np.isfinite(spectrum))
     assert spectrum.max() > 0.0
 

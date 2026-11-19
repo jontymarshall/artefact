@@ -222,7 +222,6 @@ def calculate_rre(lstar):
     return rre
 
 
-@njit
 def blowout_size(lstar, mstar, density, qpr=1.0, beta=BETA_BLOWOUT):
     """
     Radiation pressure blow-out size of a spherical grain.
@@ -575,7 +574,6 @@ def calculate_luminosity(rstar, tstar):
     lphot = (4.0 * np.pi * SIGMA_SB * (rstar * R_SUN) ** 2 * tstar**4) / L_SUN
     return lphot
 
-@njit
 def calculate_mass(lstar):
     """Mass (solar) of a main-sequence star from its luminosity (inverts Salaris & Cassisi 2005).
 

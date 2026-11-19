@@ -7,7 +7,7 @@ same Teff, radius, luminosity, log g and [Fe/H], errors included.
 
 import numpy as np
 import pytest
-from artefact import RTModel, fitting, phoenix
+from artefact import RTModel, StarModel, fitting, phoenix
 
 # HD 10647 (q1 Eri) between 0.3 and 4 micron: band, wavelength (um), flux (Jy), error (Jy)
 HD10647_POINTS = [
@@ -230,6 +230,8 @@ def test_make_star_spectrum_is_the_fitted_photosphere_in_mjy():
 
 def test_fit_phoenix_needs_observations():
     model = phoenix_model()
-    model.obs_flux = None
+    star = StarModel()
+    star.parameters = model.parameters
+    star.obs_wave, star.obs_flux, star.obs_uncs = model.obs_wave, None, model.obs_uncs
     with pytest.raises(ValueError, match="obs_wave"):
-        model.fit_phoenix()
+        star.fit_phoenix()

@@ -298,26 +298,33 @@ def test_make_star_json_reproduces_blackbody(tmp_path, model_factory):
     assert from_json.sed_star == rel(blackbody.sed_star, 2e-3)
 
 
-def test_read_json_converts_jy_to_si_f_lambda(tmp_path, model_factory):
+def star_model(**overrides):
+    """A ``StarModel`` holding ``BASE_PARAMS`` + overrides (the readers live on it)."""
+    star = art.StarModel()
+    star.parameters = {**BASE_PARAMS, **overrides}
+    return star
+
+
+def test_read_json_converts_jy_to_si_f_lambda(tmp_path):
     # Regression: a factor of 1e12 error crept in during refactoring.
     path = tmp_path / "star.json"
     path.write_text(json.dumps({"star_spec": {"wavelength": [10.0, 20.0], "fnujy": [1.0, 4.0]}}))
-    waves, spect = model_factory(model=str(path)).read_json()
+    waves, spect = star_model(model=str(path)).read_json()
     assert waves == rel([10.0, 20.0])
     assert spect == rel([1e-26 * C / (10e-6) ** 2, 4e-26 * C / (20e-6) ** 2])
 
 
-def test_read_json_accepts_integer_valued_files(tmp_path, model_factory):
+def test_read_json_accepts_integer_valued_files(tmp_path):
     path = tmp_path / "star.json"
     path.write_text(json.dumps({"star_spec": {"wavelength": [10, 20], "fnujy": [1, 2]}}))
-    _, spect = model_factory(model=str(path)).read_json()
+    _, spect = star_model(model=str(path)).read_json()
     assert np.all(np.isfinite(spect)) and spect.dtype == float
 
 
-def test_read_star_converts_angstrom_and_cgs_to_um_and_si(tmp_path, model_factory):
+def test_read_star_converts_angstrom_and_cgs_to_um_and_si(tmp_path):
     path = tmp_path / "star.txt"
     path.write_text("# header\n10000.0 2.0\n20000.0 3.0\n")
-    waves, spect = model_factory(model=str(path)).read_star()
+    waves, spect = star_model(model=str(path)).read_star()
     assert waves == rel([1.0, 2.0])  # Angstrom -> um
     assert spect == rel([2.0e7, 3.0e7])  # erg/s/cm2/A -> W/m2/m
 
@@ -516,11 +523,25 @@ def test_make_disc_two_power_law_has_continuous_break(model_factory):
     assert model.scale == rel(expected / expected.sum(), 1e-10)
 
 
-def test_make_disc_rejects_unknown_and_unimplemented_types(model_factory):
-    with pytest.raises(NotImplementedError):
-        model_factory(dtype="arbit").make_disc()
-    with pytest.raises(ValueError, match="dtype"):
+def test_make_disc_rejects_unknown_types(model_factory):
+    with pytest.raises(ValueError, match="Belt type"):
         model_factory(dtype="nonsense").make_disc()
+
+
+def test_make_disc_arbit_needs_a_profile(model_factory):
+    with pytest.raises(ValueError, match="profile"):
+        model_factory(dtype="arbit").make_disc()
+
+
+def test_make_disc_arbit_follows_the_tabulated_profile(model_factory):
+    # A flat table gives equal surface density, so each annulus holds grains in
+    # proportion to its area, which is proportional to its mid-point radius.
+    model = model_factory(
+        dtype="arbit", profile_r=[40.0, 80.0], profile_sigma=[1.0, 1.0], nring=5
+    )
+    model.make_disc()
+    assert model.edges[0] == rel(40.0) and model.edges[-1] == rel(80.0)
+    assert model.scale == rel(model.radii / model.radii.sum(), 1e-10)
 
 
 def test_surface_density_distributes_each_grain_size_over_the_rings(model_factory):
