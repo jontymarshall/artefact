@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
 import numpy as np
+from astropy.io import fits
 from scipy.ndimage import gaussian_filter
 from scipy.signal import fftconvolve
-from astropy.io import fits
 
 # Defaults for model images
 ASPECT_RATIO = 0.03  # scale height over radius, H / r

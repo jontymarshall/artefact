@@ -239,7 +239,10 @@ def test_multi_belt_emission_is_the_sum_of_the_belts(monkeypatch):
         (dict(dtype="multi"), "belts"),
         (dict(dtype="multi", belts=[]), "non-empty"),
         (dict(dtype="multi", belts=[dict(dtype="multi", nring=3)]), "multi"),
-        (dict(dtype="multi", belts=[{**WARM, "mass": 0.0}, {**COLD, "mass": 0.0}]), "positive"),
+        (
+            dict(dtype="multi", belts=[{**WARM, "mass": 0.0}, {**COLD, "mass": 0.0}]),
+            "positive",
+        ),
         (dict(dtype="multi", belts=[{**WARM, "mass": -1.0}, COLD]), "non-negative"),
         (dict(dtype="multi", belts=[WARM, dict(dtype="gauss", rpeak=80.0)]), "Belt 1"),
         (dict(dtype="spiral"), "Belt type"),

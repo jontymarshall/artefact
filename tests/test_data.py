@@ -11,7 +11,6 @@ found when Python happens to run from the repository.
 """
 
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -154,11 +153,21 @@ def test_public_helpers_are_exported():
 # 3. The readers use it
 # ---------------------------------------------------------------------------
 
-STAR = dict(stype="blackbody", tstar=5772.0, rstar=1.0, dstar=10.0, lmin=0.5, lmax=2000.0, nwav=40)
+STAR = dict(
+    stype="blackbody",
+    tstar=5772.0,
+    rstar=1.0,
+    dstar=10.0,
+    lmin=0.5,
+    lmax=2000.0,
+    nwav=40,
+)
 
 
 def test_bundled_optical_constants_by_bare_name(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)  # nothing named astrosil here: must come from the package
+    monkeypatch.chdir(
+        tmp_path
+    )  # nothing named astrosil here: must come from the package
     model = art.RTModel()
     model.parameters.update({**STAR, "composition": "astrosil"})
     model.make_star()
@@ -170,7 +179,9 @@ def test_bundled_optical_constants_by_bare_name(tmp_path, monkeypatch):
 
 
 def test_optical_constants_from_a_user_file(tmp_path):
-    (tmp_path / "custom.lnk").write_text("# wavelength n k\n0.01 1.5 0.1\n1e5 1.5 0.1\n")
+    (tmp_path / "custom.lnk").write_text(
+        "# wavelength n k\n0.01 1.5 0.1\n1e5 1.5 0.1\n"
+    )
     model = art.RTModel()
     model.parameters.update({**STAR, "composition": str(tmp_path / "custom")})
     model.make_star()
@@ -195,7 +206,9 @@ def test_read_star_with_a_bundled_spectrum(tmp_path, monkeypatch):
     waves, spectrum = star.read_star()
 
     assert waves.min() < 0.5 < 5.0 < waves.max()  # wavelengths are in um
-    assert np.all(np.diff(waves) >= 0)  # non-decreasing: the SVO tables repeat some points
+    assert np.all(
+        np.diff(waves) >= 0
+    )  # non-decreasing: the SVO tables repeat some points
     assert np.all(spectrum >= 0)
 
     # the extension may be left off

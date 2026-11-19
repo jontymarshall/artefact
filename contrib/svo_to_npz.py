@@ -23,7 +23,9 @@ def convert(source, target=None):
         header = "".join(line for line in table if line.startswith("#"))
     wavelength, flux = np.loadtxt(source, comments="#", usecols=(0, 1), unpack=True)
 
-    np.savez_compressed(target, wavelength=wavelength, flux=flux, header=np.array(header))
+    np.savez_compressed(
+        target, wavelength=wavelength, flux=flux, header=np.array(header)
+    )
 
     with np.load(target) as archive:  # check the round trip
         assert np.array_equal(archive["wavelength"], wavelength)

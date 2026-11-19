@@ -84,18 +84,24 @@ def phase_weight(cos_theta, g1=art.HG_G1, g2=art.HG_G2, weight=art.HG_WEIGHT):
 @pytest.mark.parametrize("inc,pa", [(0.0, 0.0), (60.0, 33.0), (80.0, 120.0)])
 @pytest.mark.parametrize("aspect", [0.0, 0.03, 0.1])
 def test_image_conserves_the_thermal_flux(disc, inc, pa, aspect):
-    image = disc.make_image(70.0, component="emit", inc=inc, pa=pa, npix=200, aspect=aspect)
+    image = disc.make_image(
+        70.0, component="emit", inc=inc, pa=pa, npix=200, aspect=aspect
+    )
     assert image.data.sum() == rel(total_flux_mjy(disc, 70.0, ("emit",)), 1e-2)
 
 
 @pytest.mark.parametrize("inc,pa", [(0.0, 0.0), (60.0, 33.0), (80.0, 120.0)])
 def test_image_conserves_isotropically_scattered_flux(disc, inc, pa):
-    image = disc.make_image(24.0, component="scat", inc=inc, pa=pa, npix=200, g1=0.0, g2=0.0)
+    image = disc.make_image(
+        24.0, component="scat", inc=inc, pa=pa, npix=200, g1=0.0, g2=0.0
+    )
     assert image.data.sum() == rel(total_flux_mjy(disc, 24.0, ("scat",)), 1e-2)
 
 
 def test_near_edge_on_thick_disc_still_conserves_flux(disc):
-    image = disc.make_image(70.0, component="emit", inc=86.0, pa=15.0, npix=240, aspect=0.05)
+    image = disc.make_image(
+        70.0, component="emit", inc=86.0, pa=15.0, npix=240, aspect=0.05
+    )
     assert image.data.sum() == rel(total_flux_mjy(disc, 70.0, ("emit",)), 3e-2)
 
 
@@ -149,8 +155,12 @@ def lit_extent(data):
     return cols.max() - cols.min() + 1, rows.max() - rows.min() + 1  # width, height
 
 
-def test_image_is_foreshortened_along_the_minor_axis_and_follows_the_position_angle(disc):
-    kwargs = dict(npix=201, pixscale=0.1, oversample=1, inc=60.0, aspect=0.0, component="emit")
+def test_image_is_foreshortened_along_the_minor_axis_and_follows_the_position_angle(
+    disc,
+):
+    kwargs = dict(
+        npix=201, pixscale=0.1, oversample=1, inc=60.0, aspect=0.0, component="emit"
+    )
     width, height = lit_extent(disc.make_image(70.0, pa=90.0, **kwargs).data)
     assert width == pytest.approx(160, abs=3) and height == pytest.approx(80, abs=3)
     width, height = lit_extent(disc.make_image(70.0, pa=0.0, **kwargs).data)
@@ -159,7 +169,13 @@ def test_image_is_foreshortened_along_the_minor_axis_and_follows_the_position_an
 
 def test_position_angle_is_measured_east_of_north_with_east_to_the_left(disc):
     image = disc.make_image(
-        70.0, inc=60.0, pa=30.0, npix=201, pixscale=0.1, oversample=1, aspect=0.0,
+        70.0,
+        inc=60.0,
+        pa=30.0,
+        npix=201,
+        pixscale=0.1,
+        oversample=1,
+        aspect=0.0,
         component="emit",
     ).data
     c = 100
@@ -169,9 +185,13 @@ def test_position_angle_is_measured_east_of_north_with_east_to_the_left(disc):
     assert image[c + 61, c + 35] == 0  # the mirror image across the north axis
 
 
-@pytest.mark.parametrize("kwargs", [dict(component="emit"), dict(component="scat", g1=0.0, g2=0.0)])
+@pytest.mark.parametrize(
+    "kwargs", [dict(component="emit"), dict(component="scat", g1=0.0, g2=0.0)]
+)
 def test_image_is_point_symmetric_about_the_star_without_anisotropy(disc, kwargs):
-    image = disc.make_image(70.0, inc=55.0, pa=25.0, npix=101, pixscale=0.2, **kwargs).data
+    image = disc.make_image(
+        70.0, inc=55.0, pa=25.0, npix=101, pixscale=0.2, **kwargs
+    ).data
     assert image == pytest.approx(image[::-1, ::-1], rel=1e-9, abs=1e-30)
 
 
@@ -211,7 +231,11 @@ def test_unit_conversions(disc):
     beam_area = np.pi * 0.8**2 / (4 * np.log(2))  # arcsec^2
     assert area.data == rel(pix.data / pix.pixscale**2, 1e-12)
     assert per_beam.data == rel(pix.data * beam_area / pix.pixscale**2, 1e-12)
-    assert (pix.unit, area.unit, per_beam.unit) == ("mJy/pixel", "mJy/arcsec2", "mJy/beam")
+    assert (pix.unit, area.unit, per_beam.unit) == (
+        "mJy/pixel",
+        "mJy/arcsec2",
+        "mJy/beam",
+    )
 
 
 def test_beam_smooths_the_image_and_conserves_flux(disc):
@@ -281,7 +305,9 @@ def test_convolve_beam_psf_array_matches_the_equivalent_gaussian():
     assert np.max(np.abs(from_psf - from_gauss)) < 2e-3 * from_gauss.max()
 
 
-@pytest.mark.parametrize("bad", [0.0, -2.0, np.zeros((5, 5)), np.ones(5), np.ones((4, 4))])
+@pytest.mark.parametrize(
+    "bad", [0.0, -2.0, np.zeros((5, 5)), np.ones(5), np.ones((4, 4))]
+)
 def test_convolve_beam_rejects_invalid_beams(bad):
     with pytest.raises(ValueError):
         art.convolve_beam(np.ones((8, 8)), bad)
@@ -292,9 +318,13 @@ def test_image_header_describes_a_tangent_plane_with_east_to_the_left(disc):
     header = image.header()
     assert header["ASPECT"] == art.ASPECT_RATIO
     assert (header["HGG1"], header["HGG2"], header["HGWEIGHT"]) == (
-        art.HG_G1, art.HG_G2, art.HG_WEIGHT
+        art.HG_G1,
+        art.HG_G2,
+        art.HG_WEIGHT,
     )
-    assert header["CDELT1"] == rel(-0.25 / 3600) and header["CDELT2"] == rel(0.25 / 3600)
+    assert header["CDELT1"] == rel(-0.25 / 3600) and header["CDELT2"] == rel(
+        0.25 / 3600
+    )
     assert header["CRPIX1"] == 32.5 and header["CRPIX2"] == 32.5
     assert header["BUNIT"] == "mJy/pixel" and header["WAVELEN"] == 70.0
     assert header["BMAJ"] == rel(1.5 / 3600) and header["BMIN"] == header["BMAJ"]
@@ -387,7 +417,8 @@ def test_thicker_disc_is_taller_on_the_sky_but_not_wider(disc):
 
 
 @pytest.mark.parametrize(
-    "g1,g2,weight", [(0.0, 0.0, 1.0), (0.7, -0.2, 0.7), (0.9, -0.5, 0.3), (-0.3, 0.4, 0.5)]
+    "g1,g2,weight",
+    [(0.0, 0.0, 1.0), (0.7, -0.2, 0.7), (0.9, -0.5, 0.3), (-0.3, 0.4, 0.5)],
 )
 def test_two_component_hg_is_normalised_over_the_sphere(g1, g2, weight):
     mu = np.linspace(-1.0, 1.0, 400001)
@@ -399,14 +430,20 @@ def test_two_component_hg_is_normalised_over_the_sphere(g1, g2, weight):
 def test_henyey_greenstein_limits_and_closed_form():
     assert art.henyey_greenstein(0.3, 0.0) == rel(1 / (4 * np.pi), 1e-12)
     g = 0.7
-    assert art.henyey_greenstein(0.0, g) == rel((1 - g**2) / (4 * np.pi * (1 + g**2) ** 1.5))
+    assert art.henyey_greenstein(0.0, g) == rel(
+        (1 - g**2) / (4 * np.pi * (1 + g**2) ** 1.5)
+    )
     assert art.henyey_greenstein(1.0, g) > art.henyey_greenstein(-1.0, g)
     assert art.henyey_greenstein(-1.0, -g) > art.henyey_greenstein(1.0, -g)
     mixed = art.two_component_hg(0.4, 0.8, -0.3, 0.25)
     assert mixed == rel(
-        0.25 * art.henyey_greenstein(0.4, 0.8) + 0.75 * art.henyey_greenstein(0.4, -0.3), 1e-12
+        0.25 * art.henyey_greenstein(0.4, 0.8)
+        + 0.75 * art.henyey_greenstein(0.4, -0.3),
+        1e-12,
     )
-    assert art.two_component_hg(0.4, 0.8, -0.3, 1.0) == rel(art.henyey_greenstein(0.4, 0.8), 1e-12)
+    assert art.two_component_hg(0.4, 0.8, -0.3, 1.0) == rel(
+        art.henyey_greenstein(0.4, 0.8), 1e-12
+    )
 
 
 @pytest.mark.parametrize(
@@ -439,13 +476,23 @@ def test_near_and_far_sides_of_an_inclined_thin_ring_have_the_exact_phase_weight
     the side at PA + 90 degrees (east for PA = 0) is nearer the observer."""
     inc, k, c = 60.0, 62, 100
     image = disc.make_image(
-        24.0, component="scat", inc=inc, pa=0.0, npix=201, pixscale=0.1,
-        oversample=1, aspect=0.0,
+        24.0,
+        component="scat",
+        inc=inc,
+        pa=0.0,
+        npix=201,
+        pixscale=0.1,
+        oversample=1,
+        aspect=0.0,
     ).data
     edges = disc.edges
     ring = np.searchsorted(edges, k, side="right") - 1
     flux = ring_flux_mjy(disc, 24.0, "scat")[ring]
-    isotropic = flux / (np.pi * (edges[ring + 1] ** 2 - edges[ring] ** 2)) / np.cos(np.radians(inc))
+    isotropic = (
+        flux
+        / (np.pi * (edges[ring + 1] ** 2 - edges[ring] ** 2))
+        / np.cos(np.radians(inc))
+    )
     sin_i = np.sin(np.radians(inc))
     east, west = image[c, c - 31], image[c, c + 31]  # minor axis: 62 cos(60) = 31 au
     assert east == rel(isotropic * phase_weight(+sin_i), 1e-4)
@@ -455,7 +502,9 @@ def test_near_and_far_sides_of_an_inclined_thin_ring_have_the_exact_phase_weight
 
 def test_forward_scattering_brightens_the_near_side_only_when_anisotropic(disc):
     def east_over_west(**kwargs):
-        data = disc.make_image(24.0, component="scat", inc=60.0, pa=0.0, npix=200, **kwargs).data
+        data = disc.make_image(
+            24.0, component="scat", inc=60.0, pa=0.0, npix=200, **kwargs
+        ).data
         return data[:, :100].sum() / data[:, 100:].sum()  # east is the left half
 
     assert east_over_west(g1=0.0, g2=0.0) == rel(1.0, 1e-9)
@@ -464,15 +513,18 @@ def test_forward_scattering_brightens_the_near_side_only_when_anisotropic(disc):
 
 def test_phase_function_applies_to_scattered_light_only(disc):
     default = disc.make_image(70.0, component="emit", inc=60.0, npix=80)
-    changed = disc.make_image(70.0, component="emit", inc=60.0, npix=80, g1=0.95, g2=-0.9)
+    changed = disc.make_image(
+        70.0, component="emit", inc=60.0, npix=80, g1=0.95, g2=-0.9
+    )
     assert changed.data == rel(default.data, 1e-12)
     assert changed.phase is None
 
     kwargs = dict(inc=60.0, pa=30.0, npix=80)
     total = disc.make_image(24.0, component="total", **kwargs).data
-    parts = disc.make_image(24.0, component="emit", **kwargs).data + disc.make_image(
-        24.0, component="scat", **kwargs
-    ).data
+    parts = (
+        disc.make_image(24.0, component="emit", **kwargs).data
+        + disc.make_image(24.0, component="scat", **kwargs).data
+    )
     assert total == rel(parts, 1e-12)
 
 
@@ -483,25 +535,38 @@ def test_average_over_viewing_directions_recovers_the_isotropic_flux(disc):
     mu, weights = 0.5 * (nodes + 1), 0.5 * weights
     flux = [
         disc.make_image(
-            24.0, component="scat", inc=np.degrees(np.arccos(m)), pa=0.0,
-            npix=120, oversample=1, aspect=0.1,
+            24.0,
+            component="scat",
+            inc=np.degrees(np.arccos(m)),
+            pa=0.0,
+            npix=120,
+            oversample=1,
+            aspect=0.1,
         ).data.sum()
         for m in mu
     ]
-    assert np.sum(weights * np.array(flux)) == rel(total_flux_mjy(disc, 24.0, ("scat",)), 3e-2)
+    assert np.sum(weights * np.array(flux)) == rel(
+        total_flux_mjy(disc, 24.0, ("scat",)), 3e-2
+    )
 
 
 def test_phase_function_parameters_can_come_from_the_model_parameters(disc):
-    explicit = disc.make_image(24.0, component="scat", inc=50.0, npix=60, g1=0.9, g2=-0.4, hg_weight=0.2)
+    explicit = disc.make_image(
+        24.0, component="scat", inc=50.0, npix=60, g1=0.9, g2=-0.4, hg_weight=0.2
+    )
     disc.parameters.update(hg_g1=0.9, hg_g2=-0.4, hg_weight=0.2)
     from_parameters = disc.make_image(24.0, component="scat", inc=50.0, npix=60)
     assert from_parameters.data == rel(explicit.data, 1e-12)
     assert from_parameters.phase == (0.9, -0.4, 0.2)
-    override = disc.make_image(24.0, component="scat", inc=50.0, npix=60, g1=0.0, g2=0.0)
+    override = disc.make_image(
+        24.0, component="scat", inc=50.0, npix=60, g1=0.0, g2=0.0
+    )
     assert override.phase == (0.0, 0.0, 0.2)
 
 
-@pytest.mark.parametrize("kwargs", [dict(g1=1.0), dict(g2=-1.5), dict(hg_weight=1.2), dict(nlos=1)])
+@pytest.mark.parametrize(
+    "kwargs", [dict(g1=1.0), dict(g2=-1.5), dict(hg_weight=1.2), dict(nlos=1)]
+)
 def test_make_image_rejects_invalid_phase_and_sampling_arguments(disc, kwargs):
     with pytest.raises(ValueError):
         disc.make_image(24.0, component="scat", **kwargs)
@@ -529,7 +594,9 @@ def test_convolve_beam_accepts_kernel_objects_through_their_array():
     image = np.zeros((81, 81))
     image[30, 40] = 2.0
     psf = gaussian_array()
-    assert art.convolve_beam(image, FakeKernel(psf)) == rel(art.convolve_beam(image, psf), 1e-12)
+    assert art.convolve_beam(image, FakeKernel(psf)) == rel(
+        art.convolve_beam(image, psf), 1e-12
+    )
 
 
 def test_elliptical_kernel_object_gives_an_elliptical_image_and_beam_area(disc):
@@ -560,7 +627,10 @@ def test_convolve_beam_matches_astropy_for_astropy_kernels():
         conv.Gaussian2DKernel(x_stddev=4.0, y_stddev=1.5, theta=0.6),
     ):
         expected = conv.convolve_fft(image, kernel, boundary="fill", fill_value=0.0)
-        assert art.convolve_beam(image, kernel) == pytest.approx(expected, abs=1e-6 * image.max())
+        assert art.convolve_beam(image, kernel) == pytest.approx(
+            expected, abs=1e-6 * image.max()
+        )
     assert art.convolve_beam(image, 3.0 / art.FWHM_TO_SIGMA) == pytest.approx(
-        art.convolve_beam(image, conv.Gaussian2DKernel(x_stddev=3.0)), abs=2e-3 * image.max()
+        art.convolve_beam(image, conv.Gaussian2DKernel(x_stddev=3.0)),
+        abs=2e-3 * image.max(),
     )

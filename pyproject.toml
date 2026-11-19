@@ -57,7 +57,7 @@ Paper = "https://doi.org/10.1093/mnras/stad913"
 where = ["src"]
 
 [tool.setuptools.package-data]
-artefact = ["data/**/*", "py.typed"]
+artefact = ["data/**/*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "artefact.__version__" }
@@ -94,4 +94,5 @@ select = [
 ignore = [
     "N803",  # argument names such as `T` (temperature) are conventional in physics code
     "N806",  # likewise for local variables
+    "E501",  # line length
 ]

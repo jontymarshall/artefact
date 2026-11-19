@@ -6,7 +6,7 @@
    and belt radii.
 3. Image the best-fit system at wavelengths that pick out each belt.
 
-Run from anywhere:  python example/04_two_belt_system.py [--no-show]
+Run from anywhere:  python examples/04_two_belt_system.py [--no-show]
 """
 
 import argparse
@@ -14,7 +14,6 @@ import argparse
 import lmfit
 import matplotlib.pyplot as plt
 import numpy as np
-
 from example_utils import (
     model_at,
     plot_sed,
@@ -26,11 +25,33 @@ from example_utils import (
 
 # Photometric bands (um) of a typical dataset: optical, near-IR, WISE, MIPS, PACS, ALMA
 WAVELENGTHS = np.array(
-    [0.44, 0.55, 0.79, 1.25, 1.65, 2.2, 3.4, 4.6, 12.0, 22.0, 24.0, 70.0, 100.0, 160.0,
-     450.0, 870.0, 1300.0]
+    [
+        0.44,
+        0.55,
+        0.79,
+        1.25,
+        1.65,
+        2.2,
+        3.4,
+        4.6,
+        12.0,
+        22.0,
+        24.0,
+        70.0,
+        100.0,
+        160.0,
+        450.0,
+        870.0,
+        1300.0,
+    ]
 )
 TRUTH = dict(
-    log_mdust=-1.3, q=-3.5, amin=2.0, warm_fraction=0.02, rpeak_warm=5.0, rpeak_cold=80.0
+    log_mdust=-1.3,
+    q=-3.5,
+    amin=2.0,
+    warm_fraction=0.02,
+    rpeak_warm=5.0,
+    rpeak_cold=80.0,
 )
 
 
@@ -66,15 +87,15 @@ def main(show=True):
     params.add("rpeak_cold", value=70.0, min=40.0, max=150.0)
 
     def residual(theta):
-        model = run_model(
-            two_belt_parameters(**theta.valuesdict()), emission_mode="bb"
-        )
+        model = run_model(two_belt_parameters(**theta.valuesdict()), emission_mode="bb")
         return (model_at(model, wave[fit_mask]) - flux[fit_mask]) / unc[fit_mask]
 
     result = lmfit.minimize(residual, params, method="least_squares")
     print(lmfit.fit_report(result))
     for name, true_value in TRUTH.items():
-        print(f"{name:>14}: fit {result.params[name].value:8.3g}   true {true_value:8.3g}")
+        print(
+            f"{name:>14}: fit {result.params[name].value:8.3g}   true {true_value:8.3g}"
+        )
 
     best = run_model(two_belt_parameters(**result.params.valuesdict()))
     best.obs_wave, best.obs_flux, best.obs_uncs = photometry
@@ -89,7 +110,12 @@ def main(show=True):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
     show_image(
         best.make_image(
-            24.0, component="emit", inc=50.0, pa=20.0, npix=128, pixscale=0.01,
+            24.0,
+            component="emit",
+            inc=50.0,
+            pa=20.0,
+            npix=128,
+            pixscale=0.01,
             beam=0.04,
         ),
         ax=axes[0],

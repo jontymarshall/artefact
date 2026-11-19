@@ -42,4 +42,3 @@ def data_path(kind, name, suffixes=("",)):
         f"No {kind} file {name!r}. Looked in: {', '.join(tried)}. "
         f"Bundled {kind}: {', '.join(list_data(kind))}."
     )
-    

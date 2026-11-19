@@ -95,10 +95,20 @@ def two_belt_parameters(
         mdust=10**log_mdust,
         dtype="multi",
         belts=[
-            dict(dtype="gauss", rpeak=rpeak_warm, rfwhm=fwhm_warm, nring=10,
-                 mass=warm_fraction),
-            dict(dtype="gauss", rpeak=rpeak_cold, rfwhm=fwhm_cold, nring=20,
-                 mass=1.0 - warm_fraction),
+            dict(
+                dtype="gauss",
+                rpeak=rpeak_warm,
+                rfwhm=fwhm_warm,
+                nring=10,
+                mass=warm_fraction,
+            ),
+            dict(
+                dtype="gauss",
+                rpeak=rpeak_cold,
+                rfwhm=fwhm_cold,
+                nring=20,
+                mass=1.0 - warm_fraction,
+            ),
         ],
     )
 

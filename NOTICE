@@ -1,0 +1,36 @@
+artefact
+Copyright (c) 2023-2026 Jonathan P. Marshall, Robin Young and Shane Hengst.
+Distributed under the GNU General Public License v3.0 (see LICENSE).
+
+Data bundled in src/artefact/data
+---------------------------------
+The files below are redistributed with artefact. They are not covered by the GPL
+notice above; each remains under the terms of its original source. Please cite the
+sources when you use them.
+
+filters/*.csv, filters.yaml
+    Photometric filter transmission curves from the SVO Filter Profile Service
+    (http://svo2.cab.inta-csic.es/theory/fps/; Rodrigo, Esplin & Jimenez 2012;
+    Rodrigo & Solano 2020), downloaded 2026-11-02, with the ALMA, Spitzer IRS and
+    JCMT SCUBA-2 curves built for artefact. The source of each curve is recorded in
+    the comment header of its file.
+
+stellar_models/G2V_spectrum.npz, stellar_models/A0V_spectrum.npz
+    BT-NextGen (AGSS2009) model atmospheres (Allard, Homeier & Freytag 2012), obtained
+    through the SVO Theoretical Spectra service (http://svo2.cab.inta-csic.es/theory/).
+    The numbers are unchanged from the SVO text tables; they were converted to NumPy
+    .npz archives to reduce their size (see contrib/svo_to_npz.py), and the original
+    comment header of each table is stored in the archive.
+
+stellar_models/phoenix_grid.npz, phoenix_grid.sha256
+    A grid of PHOENIX-ACES-AGSS-COND-2011 synthetic spectra (Husser et al. 2013,
+    A&A 553, A6; http://phoenix.astro.physik.uni-goettingen.de), reduced and
+    resampled by artefact (see src/artefact/phoenix.py).
+
+optical_constants/astrosil.lnk
+    Complex refractive index (n, k) of astronomical silicate.
+    TODO(author): record the reference for this table (e.g. Draine 2003) and its
+    terms of use before release.
+
+TODO(author): confirm that the licence terms of each source above allow
+redistribution in a GPL-3.0 package, and add any attribution text they require.

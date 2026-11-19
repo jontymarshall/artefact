@@ -124,12 +124,16 @@ def write_surface_flux_file(path, tstar, lam_min=0.01, lam_max=1e5, n=8000):
     )
 
 
-def write_observed_flux_json(path, tstar, rstar, dstar, lam_min=0.01, lam_max=1e5, n=4000):
+def write_observed_flux_json(
+    path, tstar, rstar, dstar, lam_min=0.01, lam_max=1e5, n=4000
+):
     """JSON file holding the *observed* flux density (Jy) of a blackbody star."""
     lam = np.geomspace(lam_min, lam_max, n)  # um
     fnu_si = np.pi * art.planck_nu(C / (lam * UM), tstar)
     fnu_si = fnu_si * ((rstar * art.R_SUN) / (dstar * art.PC)) ** 2  # W/m2/Hz
-    data = {"star_spec": {"wavelength": lam.tolist(), "fnujy": (fnu_si / 1e-26).tolist()}}
+    data = {
+        "star_spec": {"wavelength": lam.tolist(), "fnujy": (fnu_si / 1e-26).tolist()}
+    }
     path.write_text(json.dumps(data))
 
 
@@ -167,8 +171,12 @@ def test_planck_lam_rayleigh_jeans_limit():
 
 def test_calculate_luminosity_solar_values_and_scaling():
     assert art.calculate_luminosity(1.0, 5772.0) == rel(1.0, 2e-3)
-    assert art.calculate_luminosity(2.0, 5772.0) == rel(4.0 * art.calculate_luminosity(1.0, 5772.0))
-    assert art.calculate_luminosity(1.0, 2 * 5772.0) == rel(16.0 * art.calculate_luminosity(1.0, 5772.0))
+    assert art.calculate_luminosity(2.0, 5772.0) == rel(
+        4.0 * art.calculate_luminosity(1.0, 5772.0)
+    )
+    assert art.calculate_luminosity(1.0, 2 * 5772.0) == rel(
+        16.0 * art.calculate_luminosity(1.0, 5772.0)
+    )
 
 
 def test_unit_conversion_constants():
@@ -182,7 +190,9 @@ def test_physics_helpers_are_reachable_from_the_class():
     expected = art.planck_lam(1e-6, 300.0)
     assert RTModel.planck_lam(1e-6, 300.0) == expected
     assert RTModel().planck_lam(1e-6, 300.0) == expected  # works on an instance too
-    assert RTModel.calculate_luminosity(1.0, 5772.0) == art.calculate_luminosity(1.0, 5772.0)
+    assert RTModel.calculate_luminosity(1.0, 5772.0) == art.calculate_luminosity(
+        1.0, 5772.0
+    )
 
 
 def test_extrapolate_wavelengths_continues_as_rayleigh_jeans():
@@ -251,7 +261,11 @@ def test_make_star_blackbody_builds_log_grid(model_factory):
 
 
 def test_make_star_blackbody_obeys_inverse_square_and_radius_scaling(model_factory):
-    base, far, big = model_factory(), model_factory(dstar=20.0), model_factory(rstar=2.0)
+    base, far, big = (
+        model_factory(),
+        model_factory(dstar=20.0),
+        model_factory(rstar=2.0),
+    )
     for model in (base, far, big):
         model.make_star()
     assert far.sed_star == rel(base.sed_star / 4, 1e-12)
@@ -263,7 +277,9 @@ def test_make_star_blackbody_matches_independent_flux_density_in_mjy(model_facto
     model.make_star()
     model.flam_to_fnu()
     nu = C / (model.sed_wave * UM)
-    geometry = ((BASE_PARAMS["rstar"] * art.R_SUN) / (BASE_PARAMS["dstar"] * art.PC)) ** 2
+    geometry = (
+        (BASE_PARAMS["rstar"] * art.R_SUN) / (BASE_PARAMS["dstar"] * art.PC)
+    ) ** 2
     expected = np.pi * art.planck_nu(nu, BASE_PARAMS["tstar"]) * geometry * 1e3 * 1e26
     assert model.sed_star == rel(expected, 1e-9)
 
@@ -280,7 +296,9 @@ def test_make_star_spectrum_reproduces_blackbody(tmp_path, model_factory):
 
 def test_make_star_spectrum_extrapolates_beyond_the_model(tmp_path, model_factory):
     write_surface_flux_file(tmp_path / "star.txt", 5772.0, lam_max=1000.0)
-    model = model_factory(stype="spectrum", model=str(tmp_path / "star.txt"), lmax=4000.0)
+    model = model_factory(
+        stype="spectrum", model=str(tmp_path / "star.txt"), lmax=4000.0
+    )
     model.make_star()
 
     beyond = np.flatnonzero(model.sed_wave > 1200.0)
@@ -308,7 +326,9 @@ def star_model(**overrides):
 def test_read_json_converts_jy_to_si_f_lambda(tmp_path):
     # Regression: a factor of 1e12 error crept in during refactoring.
     path = tmp_path / "star.json"
-    path.write_text(json.dumps({"star_spec": {"wavelength": [10.0, 20.0], "fnujy": [1.0, 4.0]}}))
+    path.write_text(
+        json.dumps({"star_spec": {"wavelength": [10.0, 20.0], "fnujy": [1.0, 4.0]}})
+    )
     waves, spect = star_model(model=str(path)).read_json()
     assert waves == rel([10.0, 20.0])
     assert spect == rel([1e-26 * C / (10e-6) ** 2, 4e-26 * C / (20e-6) ** 2])
@@ -316,7 +336,9 @@ def test_read_json_converts_jy_to_si_f_lambda(tmp_path):
 
 def test_read_json_accepts_integer_valued_files(tmp_path):
     path = tmp_path / "star.json"
-    path.write_text(json.dumps({"star_spec": {"wavelength": [10, 20], "fnujy": [1, 2]}}))
+    path.write_text(
+        json.dumps({"star_spec": {"wavelength": [10, 20], "fnujy": [1, 2]}})
+    )
     _, spect = star_model(model=str(path)).read_json()
     assert np.all(np.isfinite(spect)) and spect.dtype == float
 
@@ -345,7 +367,9 @@ def photometry_from_model(model, factor, wavelengths):
     return factor * f_lam * (wavelengths * UM) ** 2 / C
 
 
-def test_scale_star_recovers_known_factor_and_ignores_points_outside_window(model_factory):
+def test_scale_star_recovers_known_factor_and_ignores_points_outside_window(
+    model_factory,
+):
     model = model_factory()
     model.make_star()
     before = model.sed_star.copy()
@@ -405,7 +429,9 @@ def test_scale_star_after_fnu_conversion_is_rejected(model_factory):
 
 
 def test_make_dust_size_distribution_and_mass_normalisation(model_factory):
-    model = model_factory(amin=0.5, amax=500.0, ngrain=7, q=-3.5, density=3.0, mdust=0.02)
+    model = model_factory(
+        amin=0.5, amax=500.0, ngrain=7, q=-3.5, density=3.0, mdust=0.02
+    )
     model.make_dust()
 
     assert model.ag[0] == rel(0.5) and model.ag[-1] == rel(500.0)
@@ -449,7 +475,9 @@ def test_make_dust_mass_to_cross_section_ratio_matches_thesis_eq_2_12(model_fact
     assert mass / cross_section == rel(expected, 2e-2)  # the sum is a quadrature
 
 
-def test_read_optical_constants_interpolates_and_forces_absorbing_sign(tmp_path, model_factory):
+def test_read_optical_constants_interpolates_and_forces_absorbing_sign(
+    tmp_path, model_factory
+):
     (tmp_path / "dust.lnk").write_text(
         "# lambda  n  k\n0.1 1.5 0.01\n10.0 2.0 0.5\n3000.0 3.0 -2.0\n"
     )
@@ -502,9 +530,13 @@ def test_make_disc_single_power_law_weights_follow_ring_area(model_factory):
 
 
 @pytest.mark.parametrize("alpha", [-1.5, -1.0, 0.0])
-def test_make_disc_ring_weights_match_the_analytic_radial_integral(model_factory, alpha):
+def test_make_disc_ring_weights_match_the_analytic_radial_integral(
+    model_factory, alpha
+):
     """Mueller (2007), Eq. 2.17: grains per annulus = integral of N(r) 2 pi r dr."""
-    model = model_factory(dtype="onepl", rin=40.0, rout=80.0, alpha_out=alpha, nring=200)
+    model = model_factory(
+        dtype="onepl", rin=40.0, rout=80.0, alpha_out=alpha, nring=200
+    )
     model.make_disc()
     edges = model.edges
     p = alpha + 2.0  # integral of r**alpha * r dr = r**p / p
@@ -514,7 +546,13 @@ def test_make_disc_ring_weights_match_the_analytic_radial_integral(model_factory
 
 def test_make_disc_two_power_law_has_continuous_break(model_factory):
     model = model_factory(
-        dtype="twopl", rin=40.0, rout=80.0, rpeak=60.0, alpha_in=3.0, alpha_out=-3.0, nring=21
+        dtype="twopl",
+        rin=40.0,
+        rout=80.0,
+        rpeak=60.0,
+        alpha_in=3.0,
+        alpha_out=-3.0,
+        nring=21,
     )
     model.make_disc()
     r = model.radii
@@ -578,12 +616,16 @@ def test_calculate_qabs_accepts_three_or_four_mie_return_values(
     model.calculate_qabs()
 
     assert model.qext.shape == model.qsca.shape == model.qabs.shape == (3, 20)
-    assert model.qext == rel(np.full((3, 20), 2.0)) and model.qsca == rel(np.full((3, 20), 0.5))
+    assert model.qext == rel(np.full((3, 20), 2.0)) and model.qsca == rel(
+        np.full((3, 20), 0.5)
+    )
     assert model.qabs == rel(np.full((3, 20), 1.5))
     assert len(calls) == 3
-    for grain_size, (refractive_index, x) in zip(model.ag, calls):
+    for grain_size, (refractive_index, x) in zip(model.ag, calls, strict=False):
         assert refractive_index is model.oc_nk
-        assert x == rel(2 * np.pi * grain_size / model.sed_wave, 1e-12)  # size parameter
+        assert x == rel(
+            2 * np.pi * grain_size / model.sed_wave, 1e-12
+        )  # size parameter
 
 
 def test_real_mie_limits():
@@ -606,7 +648,9 @@ def test_calculate_dust_scatter_structure_and_scaling(disc_model):
     # For a fixed grain size the contribution is proportional to the number of
     # grains in the ring and to 1/r^2.
     for j in range(ngrain):
-        per_ring = model.sed_rings[:, j, :] * (model.radii**2 / model.sigma[:, j])[:, None]
+        per_ring = (
+            model.sed_rings[:, j, :] * (model.radii**2 / model.sigma[:, j])[:, None]
+        )
         assert per_ring == rel(np.broadcast_to(per_ring[0], per_ring.shape), 1e-10)
 
 
@@ -633,7 +677,9 @@ def test_calculate_dust_scatter_is_linear_in_qsca_at_fixed_extinction(disc_model
     assert model.sed_scat == rel(2.0 * first, 1e-12)
 
 
-def test_scattered_and_thermal_light_carry_the_same_fraction_of_the_starlight(model_factory):
+def test_scattered_and_thermal_light_carry_the_same_fraction_of_the_starlight(
+    model_factory,
+):
     """With Q_sca = Q_abs = 1 a grain re-emits as much power thermally as it
     scatters, so the scattered SED must hold the same fraction of the stellar
     luminosity as the thermal SED (Mueller 2007, Eqs. 2.20-2.22)."""
@@ -674,16 +720,22 @@ def test_dust_temperature_bb_mode_follows_the_278k_law(wide_blackbody, model_fac
 
 
 @pytest.mark.parametrize("radius", [1.0, 4.0, 50.0])
-def test_dust_temperature_of_blackbody_grains_matches_analytic_value(wide_blackbody, radius):
+def test_dust_temperature_of_blackbody_grains_matches_analytic_value(
+    wide_blackbody, radius
+):
     ones = np.ones(wide_blackbody.sed_wave.size)
     expected = 5772.0 * np.sqrt(0.5 * art.R_SUN / (radius * art.AU))
-    assert wide_blackbody.calculate_dust_temperature(radius, ones) == rel(expected, 2e-3)
+    assert wide_blackbody.calculate_dust_temperature(radius, ones) == rel(
+        expected, 2e-3
+    )
 
 
 def test_dust_temperature_physical_trends(wide_blackbody):
     model = wide_blackbody
     ones = np.ones(model.sed_wave.size)
-    temps = [model.calculate_dust_temperature(r, ones) for r in (1.0, 2.0, 4.0, 8.0, 16.0)]
+    temps = [
+        model.calculate_dust_temperature(r, ones) for r in (1.0, 2.0, 4.0, 8.0, 16.0)
+    ]
     assert np.all(np.diff(temps) < 0)  # colder further out
     assert temps[0] / temps[2] == rel(2.0, 2e-3)  # T ~ r^-1/2 for blackbody grains
 
@@ -736,7 +788,9 @@ def test_calculate_dust_emission_structure_and_temperatures(disc_model):
     nring, ngrain, nwav = len(model.radii), len(model.ag), len(model.sed_wave)
 
     assert model.tdust.shape == (nring, ngrain)
-    assert np.all(model.tdust > art.T_CMB) and np.all(model.tdust < BASE_PARAMS["tstar"])
+    assert np.all(model.tdust > art.T_CMB) and np.all(
+        model.tdust < BASE_PARAMS["tstar"]
+    )
     assert np.all(np.diff(model.tdust, axis=0) < 0)  # outer rings are colder
     assert model.sed_ringe.shape == (nring, ngrain, nwav)
     assert np.all(model.sed_ringe >= 0) and np.all(np.isfinite(model.sed_ringe))
@@ -759,14 +813,18 @@ def test_calculate_dust_emission_scales_as_grain_number_times_cross_section(disc
 
     # ... and the emission of one grain is pi a^2 B_lambda(T) / d^2, in mJy per m
     d = BASE_PARAMS["dstar"] * art.PC
-    expected = art.MJY_PER_SI * art.planck_lam(model.sed_wave * UM, model.tdust[2, 1]) / d**2
+    expected = (
+        art.MJY_PER_SI * art.planck_lam(model.sed_wave * UM, model.tdust[2, 1]) / d**2
+    )
     assert per_grain[2, 1, :] == rel(expected, 1e-10)
 
 
 def test_calculate_dust_emission_falls_as_distance_squared(model_factory):
     fluxes = []
     for dstar in (10.0, 20.0):
-        model = model_factory(dstar=dstar, lmin=0.1, lmax=1e4, nwav=300, ngrain=3, nring=4)
+        model = model_factory(
+            dstar=dstar, lmin=0.1, lmax=1e4, nwav=300, ngrain=3, nring=4
+        )
         model.make_star()
         model.make_dust()
         model.make_disc()
@@ -786,7 +844,14 @@ def test_calculate_dust_emission_conserves_energy(model_factory, dtype, extra, q
     This fixes the absolute amplitude of the emission, not just its shape."""
     nwav, ngrain = 2500, 6
     model = model_factory(
-        dtype=dtype, q=q, lmin=0.1, lmax=1e4, nwav=nwav, ngrain=ngrain, nring=12, **extra
+        dtype=dtype,
+        q=q,
+        lmin=0.1,
+        lmax=1e4,
+        nwav=nwav,
+        ngrain=ngrain,
+        nring=12,
+        **extra,
     )
     model.make_star()
     model.make_dust()
@@ -828,7 +893,11 @@ def test_flam_to_fnu_converts_each_component_exactly_once(disc_model):
     model = disc_model
     model.calculate_dust_scatter()
     model.calculate_dust_emission(mode="bb")
-    star, emit, scat = model.sed_star.copy(), model.sed_emit.copy(), model.sed_scat.copy()
+    star, emit, scat = (
+        model.sed_star.copy(),
+        model.sed_emit.copy(),
+        model.sed_scat.copy(),
+    )
     factor = (model.sed_wave * UM) ** 2 / C
 
     model.flam_to_fnu()
@@ -847,7 +916,10 @@ def test_flam_to_fnu_second_call_leaves_everything_unchanged(disc_model):
     model.calculate_dust_scatter()
     model.calculate_dust_emission(mode="bb")
     model.flam_to_fnu()
-    snapshot = {n: getattr(model, n).copy() for n in ("sed_star", "sed_emit", "sed_scat", "sed_disc")}
+    snapshot = {
+        n: getattr(model, n).copy()
+        for n in ("sed_star", "sed_emit", "sed_scat", "sed_disc")
+    }
     model.flam_to_fnu()
     for name, values in snapshot.items():
         assert getattr(model, name) == rel(values, 1e-15), name
@@ -891,9 +963,15 @@ def test_end_to_end_disc_is_finite_and_negligible_in_the_optical(disc_model):
 def test_full_pipeline_from_parameter_and_optical_constant_files(tmp_path, monkeypatch):
     monkeypatch.setattr(art.core, "mie_efficiencies", fake_mie)
     (tmp_path / "dust.lnk").write_text("# lambda n k\n0.01 1.5 0.1\n10000.0 1.5 0.1\n")
-    params = {**BASE_PARAMS, "composition": str(tmp_path / "dust"), "nwav": 60, "nring": 4}
+    params = {
+        **BASE_PARAMS,
+        "composition": str(tmp_path / "dust"),
+        "nwav": 60,
+        "nring": 4,
+    }
     (tmp_path / "model.txt").write_text(
-        "# artefact test model\n" + "\n".join(f"{k} : {v}  # comment" for k, v in params.items())
+        "# artefact test model\n"
+        + "\n".join(f"{k} : {v}  # comment" for k, v in params.items())
     )
 
     model = RTModel()
@@ -934,7 +1012,9 @@ def numerical_mass_ratio(q, amin, smm, skm, smax, q_med, q_big, rho_ratio=1.0):
     mass_per_ln_s = n * s**4
     ln_s = np.log(s)
     below = s <= smm
-    return np.trapezoid(mass_per_ln_s, ln_s) / np.trapezoid(mass_per_ln_s[below], ln_s[below])
+    return np.trapezoid(mass_per_ln_s, ln_s) / np.trapezoid(
+        mass_per_ln_s[below], ln_s[below]
+    )
 
 
 def test_disc_mass_reproduces_eq_9_for_the_fiducial_parameters():
@@ -961,7 +1041,10 @@ def test_disc_mass_rescales_the_model_dust_mass_to_the_mm_size_limit():
     full = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3)
     small = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e2)
     large = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e4)
-    ratio = lambda amax: (amax**0.5 - 1.0) / (1e3**0.5 - 1.0)  # mass up to amax, q = 3.5
+    def ratio(amax):
+        return (
+            (amax**0.5 - 1.0) / (1e3**0.5 - 1.0)
+        )  # mass up to amax, q = 3.5
     assert small == rel(full / ratio(1e2), 1e-10)
     assert large == rel(full / ratio(1e4), 1e-10)
     assert small > full > large
@@ -970,14 +1053,20 @@ def test_disc_mass_rescales_the_model_dust_mass_to_the_mm_size_limit():
 def test_disc_mass_is_linear_in_dust_mass_and_scales_with_the_density_ratio():
     base = art.disc_mass_three_slope(2.0, -3.5, 1.0, 1e3)
     assert art.disc_mass_three_slope(6.0, -3.5, 1.0, 1e3) == rel(3 * base, 1e-12)
-    assert art.disc_mass_three_slope(2.0, -3.5, 1.0, 1e3, rho_ratio=0.4) == rel(0.4 * base)
+    assert art.disc_mass_three_slope(2.0, -3.5, 1.0, 1e3, rho_ratio=0.4) == rel(
+        0.4 * base
+    )
     exact = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, exact=True, rho_ratio=0.5)
-    assert exact == rel(numerical_mass_ratio(3.5, 1.0, 1e3, 1e9, 2e11, 3.7, 2.8, 0.5), 1e-3)
+    assert exact == rel(
+        numerical_mass_ratio(3.5, 1.0, 1e3, 1e9, 2e11, 3.7, 2.8, 0.5), 1e-3
+    )
 
 
 def test_disc_mass_responds_to_the_break_size_and_slopes_as_eq_9_predicts():
     base = art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3)
-    assert art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, smax=2e10) < base  # smaller bodies
+    assert (
+        art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, smax=2e10) < base
+    )  # smaller bodies
     assert art.disc_mass_three_slope(1.0, -3.5, 1.0, 1e3, q_big=3.0) < base  # steeper
     # Eq. 9 scales as s_km**(q_big - q_med) = s_km**-0.9: a tenfold smaller s_km
     # lets the shallow primordial slope act sooner and raises the mass by 10**0.9.
@@ -1017,5 +1106,7 @@ def test_calculate_disc_mass_uses_the_fitted_parameters(model_factory):
     assert model.calculate_disc_mass(mdust=0.02) == rel(result, 1e-12)
 
     # A lower-density planetesimal population (number-continuous case)
-    assert model.calculate_disc_mass(mdust=0.02, rho_big=1.0) == rel(0.4 * result, 1e-12)
+    assert model.calculate_disc_mass(mdust=0.02, rho_big=1.0) == rel(
+        0.4 * result, 1e-12
+    )
     assert model.calculate_disc_mass(mdust=0.02, exact=True) > result

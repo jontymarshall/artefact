@@ -4,13 +4,12 @@ Uses the HD 104860-like belt (60-170 au at 48 pc) to make thermal images at 70 u
 1.3 mm, a scattered-light image at 1.6 um, the effect of inclination and beam size,
 and writes a FITS file.
 
-Run from anywhere:  python example/03_resolved_images.py [--no-show]
+Run from anywhere:  python examples/03_resolved_images.py [--no-show]
 """
 
 import argparse
 
 import matplotlib.pyplot as plt
-
 from example_utils import OUTPUT, base_parameters, run_model, save_figure, show_image
 
 
@@ -35,12 +34,12 @@ def main(show=True):
     show_image(
         model.make_image(70.0, component="emit", inc=60.0, pa=30.0, beam=5.0),
         ax=axes[0],
-        title="70 um thermal, 5\" beam",
+        title='70 um thermal, 5" beam',
     )
     show_image(
         model.make_image(1300.0, component="emit", inc=60.0, pa=30.0, beam=1.0),
         ax=axes[1],
-        title="1.3 mm thermal, 1\" beam",
+        title='1.3 mm thermal, 1" beam',
     )
     show_image(
         model.make_image(1.6, component="scat", inc=60.0, pa=30.0, g1=0.7, g2=-0.2),
@@ -52,7 +51,7 @@ def main(show=True):
 
     # 2. Inclination and position angle (thin disc, no beam)
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
-    for ax, inc in zip(axes, (0.0, 45.0, 80.0)):
+    for ax, inc in zip(axes, (0.0, 45.0, 80.0), strict=False):
         show_image(
             model.make_image(70.0, component="emit", inc=inc, pa=30.0),
             ax=ax,

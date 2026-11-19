@@ -15,6 +15,7 @@ that users can write::
 Importing the package pulls in numba, astropy and miepython, so the first
 import takes a few seconds while numba loads.
 """
+
 # metadata
 __author__ = "Jonathan P. Marshall"
 __version__ = "0.3.0"
@@ -24,59 +25,63 @@ __license__ = "GNU GPL V3"
 __url__ = "https://github.com/jontymarshall/artefact"
 
 # package contents
+from ._data import (
+    data_path,
+    list_data,
+)
 from .core import (
-    # model and image classes
-    StarModel,
-    ModBBModel,
-    RTModel,
-    # stellar and dust helpers
-    calculate_luminosity,
-    calculate_tbb,
-    calculate_rbb,
-    calculate_rre,
-    extrapolate_wavelengths,
-    planck_lam,
-    planck_nu,
-    modified_blackbody,
-    ring_grid,
-    # disc mass
-    disc_mass_three_slope,
     # physical constants (SI) and unit conversions
     AU,
     C_LIGHT,
     CGS_FLAM_TO_SI,
-    G_CM3_TO_KG_M3,
     FWHM_PER_SIGMA,
     FWHM_TO_SIGMA,
+    G_CM3_TO_KG_M3,
     H_PLANCK,
     K_B,
     L_SUN,
     M_EARTH,
     MJY_PER_SI,
     PC,
-    R_SUN,
-    SI_PER_MJY,
-    SIGMA_SB,
-    UM,
-    #model defaults
+    # model defaults
     Q_BIG,
     Q_MED,
+    R_SUN,
     S_KM,
     S_MAX,
     S_MM,
     SCALE_WAVE_MAX,
     SCALE_WAVE_MIN,
+    SI_PER_MJY,
+    SIGMA_SB,
     T_BB_1AU,
     T_CMB,
+    UM,
+    ModBBModel,
+    RTModel,
+    # model and image classes
+    StarModel,
+    # stellar and dust helpers
+    calculate_luminosity,
+    calculate_rbb,
+    calculate_rre,
+    calculate_tbb,
+    # disc mass
+    disc_mass_three_slope,
+    extrapolate_wavelengths,
+    modified_blackbody,
+    planck_lam,
+    planck_nu,
+    ring_grid,
 )
-
+from .fitting import (
+    BandResponse,
+    FilterCurve,
+    Photometer,
+    band_weights,
+    read_filter,
+)
 from .image import (
-    ModelImage,
-    # imaging
-    convolve_beam,
-    disc_surface_brightness,
-    henyey_greenstein,
-    two_component_hg,
     # model defaults
     ARCSEC_PER_DEG,
     ASPECT_RATIO,
@@ -85,58 +90,46 @@ from .image import (
     HG_WEIGHT,
     MIN_ASPECT,
     MIN_INC,
+    ModelImage,
+    # imaging
+    convolve_beam,
+    disc_surface_brightness,
+    henyey_greenstein,
+    two_component_hg,
 )
-
-
-from .fitting import (
-    Photometer,
-    BandResponse,
-    FilterCurve,
-    band_weights,
-    read_filter,
-)
-
-
 from .phoenix import (
+    ERROR_FLOOR,
+    FEH_PRIOR,
+    # model constants
+    L_SUN_W,
+    LOGG_PRIOR,
+    MIN_STELLAR_POINTS,
+    MISSING_ERROR_FRACTION,
+    # model defaults
+    NO_EXTINCTION_WITHIN_PC,
+    PARSEC_M,
+    R_SUN_M,
+    RV,
+    SAMPLES,
+    STELLAR_MAX_UM,
+    STELLAR_MIN_UM,
     PhoenixGrid,
     Quantity,
     StellarFit,
-    # grid functions
-    load_grid,
-    save_grid,
-    verify_shipped_grid,
     build_grid,
-    # model constants
-    L_SUN_W,
-    R_SUN_M,
-    PARSEC_M,
-    # model defaults
-    NO_EXTINCTION_WITHIN_PC,
-    RV,
-    STELLAR_MIN_UM,
-    STELLAR_MAX_UM,
-    MIN_STELLAR_POINTS,
-    MISSING_ERROR_FRACTION,
-    ERROR_FLOOR,
-    SAMPLES,
-    LOGG_PRIOR,
-    FEH_PRIOR,
+    effective_errors,
     # star functions
     extinction_av,
-    sample_covariance,
-    effective_errors,
-    percentile_errors,
-    stellar_luminosity_lsun,
     fit_star,
+    # grid functions
+    load_grid,
     main_sequence_mass,
+    percentile_errors,
+    sample_covariance,
+    save_grid,
+    stellar_luminosity_lsun,
+    verify_shipped_grid,
 )
-
-
-from ._data import (
-    data_path,
-    list_data,
-)
-
 
 # public API
 __all__ = [

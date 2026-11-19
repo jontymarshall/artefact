@@ -4,14 +4,12 @@ Builds a solar twin at 10 pc with a 40-60 au belt, runs the radiative transfer a
 plots the stellar, thermal and scattered-light components, then shows how the
 dust temperature varies with radius and grain size.
 
-Run from anywhere:  python example/01_sed_single_belt.py [--no-show]
+Run from anywhere:  python examples/01_sed_single_belt.py [--no-show]
 """
 
 import argparse
 
 import matplotlib.pyplot as plt
-import numpy as np
-
 from example_utils import base_parameters, plot_sed, run_model, save_figure
 
 

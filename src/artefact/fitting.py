@@ -27,7 +27,6 @@ import yaml
 
 from ._data import DATA_DIR
 
-
 FILTER_DIR = DATA_DIR / "filters"
 DEFAULT_MAPPING_PATH = DATA_DIR / "filters.yaml"
 MAX_SAMPLES = (

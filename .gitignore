@@ -7,3 +7,10 @@ artefact.egg-info
 #Output files
 *.png
 *.fits
+
+#Build and tool caches
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/

@@ -7,6 +7,7 @@ same Teff, radius, luminosity, log g and [Fe/H], errors included.
 
 import numpy as np
 import pytest
+
 from artefact import RTModel, StarModel, fitting, phoenix
 
 # HD 10647 (q1 Eri) between 0.3 and 4 micron: band, wavelength (um), flux (Jy), error (Jy)

@@ -8,7 +8,6 @@ distributions and a power-law grain size distribution.
 
 import json
 import warnings
-from dataclasses import dataclass
 from pathlib import Path
 
 import astropy.constants as const
@@ -17,6 +16,7 @@ import numpy as np
 from numba import njit
 from scipy.optimize import brentq, curve_fit
 
+from ._data import data_path
 from .fitting import Photometer
 from .image import (
     ASPECT_RATIO,
@@ -31,10 +31,9 @@ from .image import (
     two_component_hg,
 )
 from .phoenix import FEH_PRIOR, LOGG_PRIOR, fit_star, load_grid
-from ._data import data_path
 
 # Physical constants (SI units)
-G_GRAV = const.G.value # 6.6743e-11 m^3 / kg / s^2
+G_GRAV = const.G.value  # 6.6743e-11 m^3 / kg / s^2
 H_PLANCK = const.h.value  # 6.626e-34 J s
 C_LIGHT = const.c.value  # 299792458.0 m / s
 K_B = const.k_B.value  # 1.38e-23 J / K
@@ -53,7 +52,7 @@ SI_PER_MJY = 1e-26 * 1e-3  # 1 mJy expressed in W/m2/Hz
 CGS_FLAM_TO_SI = 1e-7 * 1e4 * 1e10  # erg/s/cm2/A -> W/m2/m
 G_CM3_TO_KG_M3 = 1e3  # grain density: g/cm3 -> kg/m3
 FWHM_PER_SIGMA = np.sqrt(8.0 * np.log(2.0))
-FWHM_TO_SIGMA  = 1.0 / np.sqrt(8.0 * np.log(2.0))
+FWHM_TO_SIGMA = 1.0 / np.sqrt(8.0 * np.log(2.0))
 T_CMB = 2.73  # K, lower bound of the dust temperature search
 T_BB_1AU = 278.0  # K, blackbody temperature at 1 au from a 1 L_sun star
 SCALE_WAVE_MIN = 0.44  # um, lower limit of photometry used by scale_star
@@ -71,6 +70,7 @@ Q_BIG = 2.8  # slope of the primordial planetesimals, s_km < s < s_max
 BETA_BLOWOUT = 0.5
 DEFAULT_NRING = 30  # annuli per belt in a multi-belt disc, if a belt gives none
 BELT_TYPES = ("gauss", "onepl", "twopl", "arbit", "multi")  # shapes of a single belt
+
 
 @njit(cache=True)
 def planck_lam(wav, T):
@@ -121,10 +121,10 @@ def planck_nu(freq, T):
 @njit(cache=True)
 def modified_blackbody(wav, T, lam0, beta):
     """
-    Calculate modified blackbody defined as 
-    I = B(lam,T) 
-    before the break wavelength lam0 and 
-    I = B(lam,T) * (lam0/lam)**beta 
+    Calculate modified blackbody defined as
+    I = B(lam,T)
+    before the break wavelength lam0 and
+    I = B(lam,T) * (lam0/lam)**beta
     beyond the break wavelength lam0.
 
     Parameters
@@ -137,32 +137,32 @@ def modified_blackbody(wav, T, lam0, beta):
         Break wavelength in microns.
     beta : float
         Exponent of modified emission beyond lam0.
-    
+
     Returns
     -------
     intensity : float or array
         I(wav,T) W/m^2/m/sr
     """
 
-    intensity = planck_lam(wav*UM, T)
+    intensity = planck_lam(wav * UM, T)
 
-    intensity[np.where(wav > lam0)] *= (lam0/wav)**beta
+    intensity[np.where(wav > lam0)] *= (lam0 / wav) ** beta
 
     return intensity
 
 
-def calculate_tbb(rdust,lstar):
+def calculate_tbb(rdust, lstar):
     """
-    Calculate blackbody temperature for dust (in Kelvin) at a distance Rbb 
+    Calculate blackbody temperature for dust (in Kelvin) at a distance Rbb
     (in au) from a star of luminosity Lstar (in Lsol).
-    
+
     Parameters
     ----------
     rdust : float or array
         Radius of dust in au.
     lstar : float
         Luminosity of star in Lsol.
-    
+
     Returns
     -------
     tbb : float
@@ -175,18 +175,18 @@ def calculate_tbb(rdust,lstar):
     return tbb
 
 
-def calculate_rbb(tdust,lstar):
+def calculate_rbb(tdust, lstar):
     """
-    Calculate blackbody radius for dust (in au) at a blackbody temperature 
+    Calculate blackbody radius for dust (in au) at a blackbody temperature
     Tbb (in Kelvin) around a star of luminosity Lstar (in Lsol).
-    
+
     Parameters
     ----------
     tdust : float or array
         Temperature of dust in Kelvin.
     lstar : float
         Luminosity of star in Lsol.
-    
+
     Returns
     -------
     rbb : float
@@ -200,22 +200,22 @@ def calculate_rbb(tdust,lstar):
 
 def calculate_rre(lstar):
     """
-    Calculate estimated radius for dust (in au) around a star of luminosity 
+    Calculate estimated radius for dust (in au) around a star of luminosity
     Lstar (in Lsol) using the Rd-Ls relation inferred from REASONS (Matra+2025).
-    
+
     Parameters
     ----------
     lstar : float
         Luminosity of star in Lsol.
-    
+
     Returns
     -------
     rre : float
         Rre au
     """
 
-    R0 = 92.0 # +/- 6 au
-    gamma = 0.14 # +/- 0.03
+    R0 = 92.0  # +/- 6 au
+    gamma = 0.14  # +/- 0.03
 
     rre = R0 * lstar**gamma
 
@@ -267,7 +267,17 @@ def blowout_size(lstar, mstar, density, qpr=1.0, beta=BETA_BLOWOUT):
         * lstar
         * L_SUN
         * qpr
-        / (16.0 * np.pi * G_GRAV * mstar * M_SUN * C_LIGHT * density * G_CM3_TO_KG_M3 * beta)
+        / (
+            16.0
+            * np.pi
+            * G_GRAV
+            * mstar
+            * M_SUN
+            * C_LIGHT
+            * density
+            * G_CM3_TO_KG_M3
+            * beta
+        )
     )  # m
     return size / UM
 
@@ -356,7 +366,11 @@ def make_belt_profile(params):
 
         case "twopl":
             rmin, rmax = params["rin"], params["rout"]
-            rpeak, alpha, gamma = params["rpeak"], params["alpha_in"], params["alpha_out"]
+            rpeak, alpha, gamma = (
+                params["rpeak"],
+                params["alpha_in"],
+                params["alpha_out"],
+            )
 
             def density(radii):
                 return np.where(
@@ -377,9 +391,7 @@ def make_belt_profile(params):
                 return np.interp(radii, table_r, table_density)
 
         case _:
-            raise ValueError(
-                f"'dtype' must be one of {BELT_TYPES}, got {dtype!r}."
-            )
+            raise ValueError(f"'dtype' must be one of {BELT_TYPES}, got {dtype!r}.")
 
     if not 0.0 < rmin < rmax:
         raise ValueError(f"A belt needs 0 < rin < rout, got {rmin!r} and {rmax!r} au.")
@@ -574,6 +586,7 @@ def calculate_luminosity(rstar, tstar):
     lphot = (4.0 * np.pi * SIGMA_SB * (rstar * R_SUN) ** 2 * tstar**4) / L_SUN
     return lphot
 
+
 def calculate_mass(lstar):
     """Mass (solar) of a main-sequence star from its luminosity (inverts Salaris & Cassisi 2005).
 
@@ -581,7 +594,10 @@ def calculate_mass(lstar):
     """
     lum = np.atleast_1d(np.asarray(lstar, dtype=float))
     mass = np.empty_like(lum)
-    low, mid_high = 0.23 * 0.43**2.3, 2.0**4  # luminosity at the segment boundaries (0.43 and 2 Msun)
+    low, mid_high = (
+        0.23 * 0.43**2.3,
+        2.0**4,
+    )  # luminosity at the segment boundaries (0.43 and 2 Msun)
     top = 1.4 * 55.0**3.5
     mass[lum < low] = (lum[lum < low] / 0.23) ** (1 / 2.3)
     sel = (lum >= low) & (lum < mid_high)
@@ -618,16 +634,20 @@ class StarModel:
         self.photosphere = None
 
         # Observations
-        self.obs_flux = None    # flux densities in mJy
-        self.obs_uncs = None    # uncertainties in mJy
-        self.obs_wave = None    # wavelengths in um
-        self.obs_band = None    # optional band names (data/filters.yaml), for filter-integrated fits
-        self.stellarfit = None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+        self.obs_flux = None  # flux densities in mJy
+        self.obs_uncs = None  # uncertainties in mJy
+        self.obs_wave = None  # wavelengths in um
+        self.obs_band = (
+            None  # optional band names (data/filters.yaml), for filter-integrated fits
+        )
+        self.stellarfit = (
+            None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+        )
 
         # Scaling
         self._in_fnu = False
 
-    def parse_star(self,parameters):
+    def parse_star(self, parameters):
         """
         Create a stellar photosphere model in FLAM units.
         Sets self.wavelengths and self.photosphere to be returned to either a
@@ -635,7 +655,7 @@ class StarModel:
 
         """
 
-        self._in_fnu = False #reset _in_fnu flag
+        self._in_fnu = False  # reset _in_fnu flag
 
         # rstar and tstar are outputs of the "phoenix" fit, so they need not be given for it
         rstar = parameters.get("rstar")
@@ -712,7 +732,14 @@ class StarModel:
             Photospheric flux density in W/m2/m in ascending order.
 
         """
-        spectrum_file = data_path("stellar_models", self.parameters["model"], suffixes=("", ".json",))
+        spectrum_file = data_path(
+            "stellar_models",
+            self.parameters["model"],
+            suffixes=(
+                "",
+                ".json",
+            ),
+        )
 
         with open(spectrum_file) as spec_file:
             data = json.load(spec_file)
@@ -743,7 +770,11 @@ class StarModel:
             Photospheric flux density in W/m2/m in ascending order.
 
         """
-        path = data_path("stellar_models", self.parameters["model"], suffixes=("", ".npz", ".tbl", ".txt"))
+        path = data_path(
+            "stellar_models",
+            self.parameters["model"],
+            suffixes=("", ".npz", ".tbl", ".txt"),
+        )
 
         if Path(path).suffix == ".npz":
             with np.load(path) as archive:
@@ -759,8 +790,7 @@ class StarModel:
 
         return model_waves, model_spect
 
-
-    def fit_phoenix(self,model_waves=None):
+    def fit_phoenix(self, model_waves=None):
         """
         Fit a stellar photosphere model from a pre-compiled PHOENIX grid file.
 
@@ -776,8 +806,11 @@ class StarModel:
         """
 
         if model_waves is None:
-            model_waves = np.geomspace(self.parameters["lmin"], self.parameters["lmax"],
-                                       num=int(self.parameters["nwav"]))
+            model_waves = np.geomspace(
+                self.parameters["lmin"],
+                self.parameters["lmax"],
+                num=int(self.parameters["nwav"]),
+            )
         model_waves = np.asarray(model_waves)
 
         if self.obs_wave is None or self.obs_flux is None or self.obs_uncs is None:
@@ -790,37 +823,44 @@ class StarModel:
 
         if self.obs_band is not None:
             # bands with a filter in data/filters.yaml are integrated over it
-            phoenix_photometry = Photometer.from_bands(self.obs_band, wave_um, flux_jy, err_jy)
+            phoenix_photometry = Photometer.from_bands(
+                self.obs_band, wave_um, flux_jy, err_jy
+            )
         else:
             # no band names: the model is compared at each point's wavelength
             phoenix_photometry = Photometer(wave_um, flux_jy, err_jy)
 
-        logg_prior = (self.parameters.get("logg_prior",LOGG_PRIOR[0]),
-                      self.parameters.get("logg_prior_sigma",LOGG_PRIOR[1]))
+        logg_prior = (
+            self.parameters.get("logg_prior", LOGG_PRIOR[0]),
+            self.parameters.get("logg_prior_sigma", LOGG_PRIOR[1]),
+        )
 
-        feh_prior = (self.parameters.get("feh_prior",FEH_PRIOR[0]),
-                     self.parameters.get("feh_prior_sigma",FEH_PRIOR[1]))
+        feh_prior = (
+            self.parameters.get("feh_prior", FEH_PRIOR[0]),
+            self.parameters.get("feh_prior_sigma", FEH_PRIOR[1]),
+        )
 
-        stellarfit = fit_star(phoenix_photometry,
-                                self.parameters["dstar"],
-                                load_grid(),
-                                distance_err_pc=self.parameters.get("dstar_err"),
-                                logg=logg_prior[0],
-                                mh=feh_prior[0],
-                                logg_prior=logg_prior,
-                                mh_prior=feh_prior,
-                                fit_surface = True,
-                              )
+        stellarfit = fit_star(
+            phoenix_photometry,
+            self.parameters["dstar"],
+            load_grid(),
+            distance_err_pc=self.parameters.get("dstar_err"),
+            logg=logg_prior[0],
+            mh=feh_prior[0],
+            logg_prior=logg_prior,
+            mh_prior=feh_prior,
+            fit_surface=True,
+        )
 
         model_spect = stellarfit.flux_at(model_waves)
 
-        #write parameters into model object.
+        # write parameters into model object.
         self.parameters["lstar"] = stellarfit.luminosity_lsun.value
         self.parameters["tstar"] = stellarfit.teff.value
         self.parameters["rstar"] = stellarfit.radius_rsun.value
-        self.parameters["logg"]  = stellarfit.logg.value
-        self.parameters["feh"]   = stellarfit.feh.value
-        self.stellarfit          = stellarfit #for uncertainties
+        self.parameters["logg"] = stellarfit.logg.value
+        self.parameters["feh"] = stellarfit.feh.value
+        self.stellarfit = stellarfit  # for uncertainties
 
         model_spect *= 1e-26 * C_LIGHT / (model_waves * UM) ** 2  # Jy -> W/m2/m
 
@@ -860,11 +900,17 @@ class StarModel:
 
         if not mask.any():
             raise ValueError(f"No photometry between {lmin} and {lmax} um.")
-        if lobs[mask].min() < self.wavelengths[0] or lobs[mask].max() > self.wavelengths[-1]:
+        if (
+            lobs[mask].min() < self.wavelengths[0]
+            or lobs[mask].max() > self.wavelengths[-1]
+        ):
             raise ValueError("Photometry to be fitted lies outside the model grid.")
 
-        model = (np.interp(lobs[mask], self.wavelengths, self.photosphere)
-                * (lobs[mask] * UM) ** 2 / C_LIGHT)
+        model = (
+            np.interp(lobs[mask], self.wavelengths, self.photosphere)
+            * (lobs[mask] * UM) ** 2
+            / C_LIGHT
+        )
 
         popt, _ = curve_fit(lambda x, a: a * x, model, fobs[mask], sigma=uobs[mask])
 
@@ -878,8 +924,8 @@ class ModBBModel:
     stored in the `parameters` dictionary. The methods depend on each other's
     results, so they are intended to be called in this order:
 
-        get_parameters -> make_star -> make_dust -> read_optical_constants 
-        -> make_disc -> calculate_surface_density -> calculate_qabs 
+        get_parameters -> make_star -> make_dust -> read_optical_constants
+        -> make_disc -> calculate_surface_density -> calculate_qabs
         -> calculate_dust_scatter -> calculate_dust_emission
         -> flam_to_fnu
 
@@ -890,12 +936,12 @@ class ModBBModel:
     sed_wave : ndarray
         Model wavelengths in microns.
     sed_star, sed_modbb : ndarray
-        Stellar photosphere and modified blackbody component spectra on the 
+        Stellar photosphere and modified blackbody component spectra on the
         `sed_wave` grid. Total disc emission only set by flam_to_fnu.
     obs_wave, obs_flux, obs_uncs : array-like or None
         Observed wavelengths (um), fluxes and uncertainties.
     tdust, adust, rbb, rre, lam0, beta : ndarray or float
-        Dust temperature, scaling factor, blackbody radius, inferred radius, 
+        Dust temperature, scaling factor, blackbody radius, inferred radius,
         break wavelength, beta.
     _in_fnu : bool
         Flag if the conversion from FLAM to FNU has been carried out yet.
@@ -912,23 +958,27 @@ class ModBBModel:
         # Spectra
         self.sed_wave = None
         self.sed_star = None
-        self.sed_modb = None # no scattered light -> sed_modb == sed_disc by default
+        self.sed_modb = None  # no scattered light -> sed_modb == sed_disc by default
 
         # Observations
         self.obs_flux = None
         self.obs_uncs = None
         self.obs_wave = None
-        self.obs_band = None  # optional band names (data/filters.yaml), for filter-integrated fits
-        self.stellarfit = None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+        self.obs_band = (
+            None  # optional band names (data/filters.yaml), for filter-integrated fits
+        )
+        self.stellarfit = (
+            None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+        )
 
         # Disc emission
-        self.tdust = None # dust temperature in Kelvin
-        self.rbb   = None # dust radius assuming blackbody emission
-        self.rre   = None # dust radius assuming R-L relationship from Matra+2025
-        self.adust = None # scaling factor for emission in au**2
-        self.lam0  = None # break wavelength for modified blackbody emission
-        self.beta  = None # modified blacbody emission exponent beyond lam0
-        self.flum  = None # fractional luminosity of modified blackbody component
+        self.tdust = None  # dust temperature in Kelvin
+        self.rbb = None  # dust radius assuming blackbody emission
+        self.rre = None  # dust radius assuming R-L relationship from Matra+2025
+        self.adust = None  # scaling factor for emission in au**2
+        self.lam0 = None  # break wavelength for modified blackbody emission
+        self.beta = None  # modified blacbody emission exponent beyond lam0
+        self.flum = None  # fractional luminosity of modified blackbody component
 
         # Scaling
         self._in_fnu = False
@@ -992,18 +1042,22 @@ class ModBBModel:
         """
 
         if self.flum is not None:
-            modbb   = modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
-            raw_fl  = np.trapezoid(modbb,x=self.sed_wave) / np.trapezoid(self.sed_star,x=self.sed_wave)
-            self.sed_modbb = ( frac_lum / raw_fl ) * modbb 
+            modbb = modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
+            raw_fl = np.trapezoid(modbb, x=self.sed_wave) / np.trapezoid(
+                self.sed_star, x=self.sed_wave
+            )
+            self.sed_modbb = (self.flum / raw_fl) * modbb
         else:
-            self.sed_modbb = (self.adust*AU**2)*modified_blackbody(self.sed_wave, self.tbb, self.lam0, self.beta)
+            self.sed_modbb = (self.adust * AU**2) * modified_blackbody(
+                self.sed_wave, self.tbb, self.lam0, self.beta
+            )
 
     def calculate_radii(self):
         """
         Calculate blackbody radius and R-L relationship radius.
         """
 
-        self.rbb = calculate_rbb(self.tdust,self.lstar)
+        self.rbb = calculate_rbb(self.tdust, self.lstar)
         self.rre = calculate_rre(self.lstar)
 
     def flam_to_fnu(self):
@@ -1013,20 +1067,21 @@ class ModBBModel:
 
         """
 
-        if self._in_fnu :
+        if self._in_fnu:
             print("Conversion to Fnu already called for this model.")
             return
-        
+
         convert_factor = (self.sed_wave * UM) ** 2 / C_LIGHT
 
         # Star
         self.sed_star *= convert_factor
-        
+
         # Disc Emission
         if self.sed_emit is not None:
-            self.sed_emit *= scalefactor
+            self.sed_emit *= convert_factor
 
         self._in_fnu = True
+
 
 class RTModel:
     """Optically thin radiative transfer model of a dusty circumstellar disc.
@@ -1087,8 +1142,12 @@ class RTModel:
         self.obs_flux = None
         self.obs_uncs = None
         self.obs_wave = None
-        self.obs_band = None  # optional band names (data/filters.yaml), for filter-integrated fits
-        self.stellarfit = None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+        self.obs_band = (
+            None  # optional band names (data/filters.yaml), for filter-integrated fits
+        )
+        self.stellarfit = (
+            None  # the PHOENIX fit (with its uncertainties), when stype is "phoenix"
+        )
 
         # Dust grains
         self.ag = None
@@ -1180,7 +1239,7 @@ class RTModel:
         star._in_fnu = self._in_fnu
 
         star.scale_star(lmin=lmin, lmax=lmax)
-        
+
         self.sed_wave = star.wavelengths
         self.sed_star = star.photosphere
 
@@ -1195,11 +1254,12 @@ class RTModel:
         """
         if "mstar" not in self.parameters and "lstar" not in self.parameters:
             raise ValueError("Calculation of blowout size requires Lstar, Mstar.")
-            
 
         elif "mstar" not in self.parameters and "lstar" in self.parameters:
-            warnings.warn("Warning: Mstar not provided, calculating from Lstar.")
-            self.parameters["mstar"] = float(calculate_mass(self.parameters["lstar"])[0])
+            warnings.warn("Warning: Mstar not provided, calculating from Lstar.", stacklevel=2)
+            self.parameters["mstar"] = float(
+                calculate_mass(self.parameters["lstar"])[0]
+            )
 
         self.ablow = blowout_size(
             self.parameters["lstar"],
@@ -1230,7 +1290,6 @@ class RTModel:
                 )
         return amin
 
-
     def make_dust(self):
         """
         Calculate dust grain sizes, numbers, and masses, assuming a power law
@@ -1259,7 +1318,7 @@ class RTModel:
             )
 
         if q > 0:
-            warnings.warn("q must be negative, got {q!r}")
+            warnings.warn("q must be negative, got {q!r}", stacklevel=2)
             q *= -1
 
         grain_sizes = np.geomspace(amin, amax, num=ngrain)
@@ -1285,7 +1344,9 @@ class RTModel:
         Read in (n,k) optical constants from a text file into self.oc_nk.
 
         """
-        path = data_path("optical_constants", self.parameters["composition"], suffixes=(".lnk",))
+        path = data_path(
+            "optical_constants", self.parameters["composition"], suffixes=(".lnk",)
+        )
 
         dl, dn, dk = np.loadtxt(path, comments="#", usecols=(0, 1, 2), unpack=True)
 
@@ -1301,7 +1362,7 @@ class RTModel:
 
         The disc is split into ``nring`` equal-width annuli that tile the
         range between the inner and outer edge exactly. The radial profile is
-        the surface number density N(r) evaluated at the annulus mid-points, and 
+        the surface number density N(r) evaluated at the annulus mid-points, and
         the number of grains in an annulus is N(r) times its area.
 
         Sets self.edges and self.radii (au), self.dr (au), self.areas (m^2) and
@@ -1344,7 +1405,6 @@ class RTModel:
         grains_per_ring = rings * self.areas  # N(r) * area, Eq. 2.17
         self.scale = grains_per_ring / np.sum(grains_per_ring)
 
-
     def _read_belts(self):
         """The list of belt dictionaries from ``belts`` or the JSON ``belts_file``."""
         if "belts" in self.parameters:
@@ -1360,7 +1420,6 @@ class RTModel:
         if not isinstance(belts, (list, tuple)) or len(belts) == 0:
             raise ValueError("'belts' must be a non-empty list of dictionaries.")
         return list(belts)
-
 
     def _make_multi_belt_profile(self):
         """
@@ -1425,7 +1484,6 @@ class RTModel:
         self.areas = areas_au2 * AU**2  # m^2
         self.belt_scale = belt_scale
         self.scale = belt_scale.sum(axis=0)
-
 
     def calculate_surface_density(self):
         """
@@ -1591,9 +1649,7 @@ class RTModel:
 
         """
 
-        self.tdust = np.zeros(
-            (len(self.radii), int(self.parameters["ngrain"]))
-        )
+        self.tdust = np.zeros((len(self.radii), int(self.parameters["ngrain"])))
 
         self.sed_emit = np.zeros(int(self.parameters["nwav"]))
         self.sed_ringe = np.zeros(
@@ -1639,31 +1695,30 @@ class RTModel:
 
         """
 
-        if self._in_fnu :
+        if self._in_fnu:
             print("Conversion to Fnu already called for this model.")
             return
-        
+
         convert_factor = (self.sed_wave * UM) ** 2 / C_LIGHT
 
         # Star
         self.sed_star *= convert_factor
-        
+
         # Disc Emission
         if self.sed_emit is not None:
             self.sed_emit *= convert_factor
             self.sed_ringe *= convert_factor
-        
+
         # Disc Scattering
         if self.sed_scat is not None:
             self.sed_scat *= convert_factor
             self.sed_rings *= convert_factor
-        
+
         self._in_fnu = True
 
         # Total disc model
         parts = [s for s in (self.sed_emit, self.sed_scat) if s is not None]
         self.sed_disc = sum(parts) if parts else None
-
 
     def calculate_disc_mass(
         self,
@@ -1722,7 +1777,6 @@ class RTModel:
             exact=exact,
         )
         return self.mdisc
-
 
     def _ring_fluxes(self, wavelength, component):
         """

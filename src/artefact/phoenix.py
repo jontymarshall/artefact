@@ -3,27 +3,28 @@ Stellar SED fit: effective temperature, radius and luminosity from photometry, p
 
 The photosphere is a PHOENIX model scaled by (R / d)^2 and reddened by a Fitzpatrick (1999) curve. Stars
 within 100 pc get no extinction; beyond that the pysed rule applies (Av = distance in kpc, Rv = 3.1).
-Fitting uses lmfit; asymmetric errors come from sampling the fit covariance (plus the distance error) 
+Fitting uses lmfit; asymmetric errors come from sampling the fit covariance (plus the distance error)
 and taking the 16th and 84th percentiles of each fitted or derived quantity.
 """
 
 import hashlib
 import logging
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 from lmfit import Parameters, minimize
 
-from .fitting import Photometer
 from ._data import DATA_DIR
+from .fitting import Photometer
 
 logger = logging.getLogger(__name__)
 
 MODEL_DIR = DATA_DIR / "stellar_models"
-PHOENIX_DIR = MODEL_DIR / "phoenix"  # the full PHOENIX model files, only needed to rebuild the grid
+PHOENIX_DIR = (
+    MODEL_DIR / "phoenix"
+)  # the full PHOENIX model files, only needed to rebuild the grid
 # a grid rebuilt from the model files; kept apart from the committed copy so that copy is always checksummed
 CACHE_PATH = MODEL_DIR / "phoenix_grid_cache.npz"
 SHIPPED_PATH = MODEL_DIR / "phoenix_grid.npz"  # the committed copy of the grid
@@ -45,7 +46,9 @@ RV = 3.1
 STELLAR_MIN_UM = 0.3  # shortward of this, chromospheric / UV excess
 STELLAR_MAX_UM = 4.0  # longward of this, disks start to contribute
 MIN_STELLAR_POINTS = 4
-MISSING_ERROR_FRACTION = 0.20  # assumed uncertainty of a flux whose catalog gives no error (e.g. IRAS)
+MISSING_ERROR_FRACTION = (
+    0.20  # assumed uncertainty of a flux whose catalog gives no error (e.g. IRAS)
+)
 ERROR_FLOOR = 0.03  # photometry errors are never smaller than 3% of the flux (calibration, saturation)
 SAMPLES = 2000
 # Priors on log g and [Fe/H] for the fit (mean, sigma). Photometry alone barely constrains them and, left
@@ -53,6 +56,7 @@ SAMPLES = 2000
 LOGG_PRIOR_SIGMA_GAIA = 0.3  # around the Gaia GSP-Phot log g, when there is one
 LOGG_PRIOR = (4.4, 0.5)  # dwarfs and subgiants, when there is no Gaia value
 FEH_PRIOR = (0.0, 0.3)  # solar neighbourhood
+
 
 @dataclass
 class PhoenixGrid:
@@ -75,7 +79,11 @@ class PhoenixGrid:
             return 0, 0, 0.0
         value = float(np.clip(value, axis[0], axis[-1]))
         upper = int(np.clip(np.searchsorted(axis, value), 1, len(axis) - 1))
-        return upper - 1, upper, (value - axis[upper - 1]) / (axis[upper] - axis[upper - 1])
+        return (
+            upper - 1,
+            upper,
+            (value - axis[upper - 1]) / (axis[upper] - axis[upper - 1]),
+        )
 
     def describe(self, logg: float, mh: float) -> str:
         return f"PHOENIX-ACES logg={logg:.2f} [M/H]={mh:+.2f} (interpolated between grid nodes)"
@@ -121,20 +129,27 @@ def load_grid(
         raise FileNotFoundError(
             f"no PHOENIX grid: none of {cache}, {shipped} or the model files in {directory} exist"
         )
-    logger.warning("building the PHOENIX cache from %s: this takes a few minutes", directory)
+    logger.warning(
+        "building the PHOENIX cache from %s: this takes a few minutes", directory
+    )
     grid = build_grid(directory)
     save_grid(grid, cache)
     return grid
 
+
 def _read_wavelength_um(directory: Path) -> np.ndarray:
     from astropy.io import fits
 
-    return fits.getdata(directory / WAVE_FILE).astype(float) * 1e-4  # Angstrom -> micron
+    return (
+        fits.getdata(directory / WAVE_FILE).astype(float) * 1e-4
+    )  # Angstrom -> micron
 
 
 def _read_cache(path: Path) -> PhoenixGrid:
     data = np.load(path)
-    return PhoenixGrid(data["teff"], data["logg"], data["mh"], data["wave_um"], data["log_flux_nu"])
+    return PhoenixGrid(
+        data["teff"], data["logg"], data["mh"], data["wave_um"], data["log_flux_nu"]
+    )
 
 
 def file_checksum(path: Path) -> str:
@@ -142,11 +157,15 @@ def file_checksum(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify_shipped_grid(path: Path = SHIPPED_PATH, checksum_path: Path = SHIPPED_CHECKSUM_PATH) -> None:
+def verify_shipped_grid(
+    path: Path = SHIPPED_PATH, checksum_path: Path = SHIPPED_CHECKSUM_PATH
+) -> None:
     """Raise ValueError unless the committed grid matches its recorded SHA-256 (a changed or damaged file)."""
     expected = checksum_path.read_text().split()[0]
     if file_checksum(path) != expected:
-        raise ValueError(f"{path} does not match {checksum_path.name}: the grid was changed or damaged")
+        raise ValueError(
+            f"{path} does not match {checksum_path.name}: the grid was changed or damaged"
+        )
 
 
 def build_grid(directory: Path = PHOENIX_DIR) -> PhoenixGrid:
@@ -169,22 +188,35 @@ def build_grid(directory: Path = PHOENIX_DIR) -> PhoenixGrid:
 
     teffs = sorted({key[0] for key in found})
     loggs = sorted({key[1] for key in found})
-    grid = np.full((len(mh_values), len(loggs), len(teffs), len(centres)), np.nan, dtype=np.float32)
+    grid = np.full(
+        (len(mh_values), len(loggs), len(teffs), len(centres)), np.nan, dtype=np.float32
+    )
     for (teff, logg, mh), path in found.items():
         flux_lambda = fits.getdata(path).astype(float)  # erg/s/cm^2/cm
-        binned = np.histogram(wave_um, bins=edges, weights=flux_lambda)[0] / np.maximum(counts, 1)
-        flux_nu_jy = binned * (centres * 1e-4) ** 2 / LIGHT_SPEED_CM_S * 1e23  # erg/s/cm^2/Hz -> Jy
+        binned = np.histogram(wave_um, bins=edges, weights=flux_lambda)[0] / np.maximum(
+            counts, 1
+        )
+        flux_nu_jy = (
+            binned * (centres * 1e-4) ** 2 / LIGHT_SPEED_CM_S * 1e23
+        )  # erg/s/cm^2/Hz -> Jy
         grid[mh_values.index(mh), loggs.index(logg), teffs.index(teff)] = np.log10(
             np.maximum(flux_nu_jy, 1e-30)
         )
         logger.info("binned %s", path.name)
-    return PhoenixGrid(np.array(teffs, float), np.array(loggs), np.array(mh_values), centres, grid)
+    return PhoenixGrid(
+        np.array(teffs, float), np.array(loggs), np.array(mh_values), centres, grid
+    )
 
 
 def save_grid(grid: PhoenixGrid, path: Path = CACHE_PATH) -> None:
     """Save photosphere model grid to .npz file."""
     np.savez_compressed(
-        path, teff=grid.teff, logg=grid.logg, mh=grid.mh, wave_um=grid.wave_um, log_flux_nu=grid.log_flux_nu
+        path,
+        teff=grid.teff,
+        logg=grid.logg,
+        mh=grid.mh,
+        wave_um=grid.wave_um,
+        log_flux_nu=grid.log_flux_nu,
     )
 
 
@@ -207,10 +239,18 @@ class StellarFit:
     n_points: int
     av: float
     model_grid: str
-    logg: Quantity = field(default_factory=lambda: Quantity(4.5))  # log10 g in cgs, from the model grid
-    feh: Quantity = field(default_factory=lambda: Quantity(0.0))  # [Fe/H] = the grid's [M/H]
-    luminosity_samples: np.ndarray = field(repr=False, default_factory=lambda: np.array([]))
-    flux_at: "callable" = field(repr=False, default=None)  # wavelength (micron) -> best-fit stellar flux (Jy)
+    logg: Quantity = field(
+        default_factory=lambda: Quantity(4.5)
+    )  # log10 g in cgs, from the model grid
+    feh: Quantity = field(
+        default_factory=lambda: Quantity(0.0)
+    )  # [Fe/H] = the grid's [M/H]
+    luminosity_samples: np.ndarray = field(
+        repr=False, default_factory=lambda: np.array([])
+    )
+    flux_at: "callable" = field(
+        repr=False, default=None
+    )  # wavelength (micron) -> best-fit stellar flux (Jy)
 
 
 def extinction_av(distance_pc: float) -> float:
@@ -237,7 +277,9 @@ def reddening_factor(wave_um: np.ndarray, av: float) -> np.ndarray:
     return 10 ** (-0.4 * a_lambda)
 
 
-def effective_errors(flux: np.ndarray, err: np.ndarray, floor: float = ERROR_FLOOR) -> np.ndarray:
+def effective_errors(
+    flux: np.ndarray, err: np.ndarray, floor: float = ERROR_FLOOR
+) -> np.ndarray:
     """Errors with the calibration floor applied; a flux without an error counts as 20% uncertain."""
     err = np.where(np.isfinite(err) & (err > 0), err, MISSING_ERROR_FRACTION * flux)
     return np.maximum(err, floor * flux)
@@ -270,7 +312,14 @@ def percentile_errors(value: float, samples: np.ndarray) -> Quantity:
 
 def stellar_luminosity_lsun(radius_rsun: np.ndarray, teff: np.ndarray) -> np.ndarray:
     """L = 4 pi R^2 sigma Teff^4 in solar luminosities."""
-    return 4 * np.pi * (radius_rsun * R_SUN_M) ** 2 * SIGMA_SB * np.asarray(teff, dtype=float) ** 4 / L_SUN_W
+    return (
+        4
+        * np.pi
+        * (radius_rsun * R_SUN_M) ** 2
+        * SIGMA_SB
+        * np.asarray(teff, dtype=float) ** 4
+        / L_SUN_W
+    )
 
 
 def _model_flux(
@@ -278,7 +327,11 @@ def _model_flux(
     logg: float, mh: float, av: float,
 ) -> np.ndarray:  # fmt: skip
     solid = (radius_rsun * R_SUN_M / (distance_pc * PARSEC_M)) ** 2
-    return grid.surface_flux_jy(wave_um, teff, logg, mh) * solid * reddening_factor(wave_um, av)
+    return (
+        grid.surface_flux_jy(wave_um, teff, logg, mh)
+        * solid
+        * reddening_factor(wave_um, av)
+    )
 
 
 def fit_star(
@@ -324,8 +377,12 @@ def fit_star(
         shape = data.evaluate(  # per solar radius
             lambda wave: _model_flux(grid, wave, teff, 1.0, distance_pc, logg, mh, av)
         )
-        scale = np.sum(data.flux_jy * shape / sigma**2) / np.sum(shape**2 / sigma**2)  # best (R/Rsun)^2
-        return float(np.sum(((data.flux_jy - scale * shape) / sigma) ** 2)), float(np.sqrt(max(scale, 1e-12)))
+        scale = np.sum(data.flux_jy * shape / sigma**2) / np.sum(
+            shape**2 / sigma**2
+        )  # best (R/Rsun)^2
+        return float(np.sum(((data.flux_jy - scale * shape) / sigma) ** 2)), float(
+            np.sqrt(max(scale, 1e-12))
+        )
 
     if teff_start is None:
         scores = [(chi2_for_node(t)[0], t) for t in grid.teff]
@@ -333,7 +390,9 @@ def fit_star(
     radius_start = chi2_for_node(teff_start)[1]
 
     params = Parameters()
-    params.add("teff", value=teff_start, min=float(grid.teff[0]), max=float(grid.teff[-1]))
+    params.add(
+        "teff", value=teff_start, min=float(grid.teff[0]), max=float(grid.teff[-1])
+    )
     params.add("radius", value=radius_start, min=0.02, max=1000.0)
     for name, value, axis in (("logg", logg, grid.logg), ("mh", mh, grid.mh)):
         if fit_surface and len(axis) > 1:
@@ -343,7 +402,14 @@ def fit_star(
 
     def model_for(p: Parameters, wave_um: np.ndarray) -> np.ndarray:
         return _model_flux(
-            grid, wave_um, p["teff"].value, p["radius"].value, distance_pc, p["logg"].value, p["mh"].value, av
+            grid,
+            wave_um,
+            p["teff"].value,
+            p["radius"].value,
+            distance_pc,
+            p["logg"].value,
+            p["mh"].value,
+            av,
         )
 
     def data_residual(p: Parameters) -> np.ndarray:
@@ -367,7 +433,9 @@ def fit_star(
     rng = np.random.default_rng(0)
     names = list(result.var_names)
     sampled = sample_covariance([fitted[n].value for n in names], result.covar, rng)
-    draws = {n: np.full(SAMPLES, fitted[n].value) for n in ("teff", "radius", "logg", "mh")}
+    draws = {
+        n: np.full(SAMPLES, fitted[n].value) for n in ("teff", "radius", "logg", "mh")
+    }
     if sampled is not None:
         for column, name in enumerate(names):
             draws[name] = sampled[:, column]
@@ -383,7 +451,9 @@ def fit_star(
     luminosities = stellar_luminosity_lsun(radii, draws["teff"])
 
     def surface_quantity(name: str, value: float) -> Quantity:
-        if name not in names or sampled is None:  # not fitted, or no usable covariance: no error to give
+        if (
+            name not in names or sampled is None
+        ):  # not fitted, or no usable covariance: no error to give
             return Quantity(value)
         return percentile_errors(value, draws[name])
 
@@ -414,7 +484,10 @@ def main_sequence_mass(luminosity_lsun: np.ndarray) -> np.ndarray:
     """
     lum = np.atleast_1d(np.asarray(luminosity_lsun, dtype=float))
     mass = np.empty_like(lum)
-    low, mid_high = 0.23 * 0.43**2.3, 2.0**4  # luminosity at the segment boundaries (0.43 and 2 Msun)
+    low, mid_high = (
+        0.23 * 0.43**2.3,
+        2.0**4,
+    )  # luminosity at the segment boundaries (0.43 and 2 Msun)
     top = 1.4 * 55.0**3.5
     mass[lum < low] = (lum[lum < low] / 0.23) ** (1 / 2.3)
     sel = (lum >= low) & (lum < mid_high)

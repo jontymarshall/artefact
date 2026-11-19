@@ -5,7 +5,7 @@ grain size slope, minimum grain size and belt radius to the infrared excess with
 emission uses the quick blackbody-temperature mode during the fit and the full
 solution for the final model.
 
-Run from anywhere:  python example/02_fit_photometry.py [--no-show]
+Run from anywhere:  python examples/02_fit_photometry.py [--no-show]
 """
 
 import argparse
@@ -13,7 +13,6 @@ import argparse
 import lmfit
 import matplotlib.pyplot as plt
 import numpy as np
-
 from example_utils import (
     EXAMPLE,
     base_parameters,
