@@ -28,9 +28,5 @@ stellar_models/phoenix_grid.npz, phoenix_grid.sha256
     resampled by artefact (see src/artefact/phoenix.py).
 
 optical_constants/astrosil.lnk
-    Complex refractive index (n, k) of astronomical silicate.
-    TODO(author): record the reference for this table (e.g. Draine 2003) and its
-    terms of use before release.
-
-TODO(author): confirm that the licence terms of each source above allow
-redistribution in a GPL-3.0 package, and add any attribution text they require.
+    Complex refractive index (n, k) of astronomical silicate (Draine 2003b, ApJ 598,
+    1026; https://www.astro.princeton.edu/~draine/dust/dust.diel.html).

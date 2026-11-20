@@ -95,5 +95,4 @@ select = [
 ignore = [
     "N803",  # argument names such as `T` (temperature) are conventional in physics code
     "N806",  # likewise for local variables
-    "E501",  # line length
 ]
