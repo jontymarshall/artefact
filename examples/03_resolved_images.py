@@ -30,7 +30,7 @@ def main(show=True):
     model = run_model(parameters)
 
     # 1. Thermal emission and scattered light at different wavelengths
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5), layout="constrained")
     show_image(
         model.make_image(70.0, component="emit", inc=60.0, pa=30.0, beam=5.0),
         ax=axes[0],
@@ -50,7 +50,7 @@ def main(show=True):
     save_figure(fig, "03_images_wavelengths.png")
 
     # 2. Inclination and position angle (thin disc, no beam)
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5), layout="constrained")
     for ax, inc in zip(axes, (0.0, 45.0, 80.0), strict=False):
         show_image(
             model.make_image(70.0, component="emit", inc=inc, pa=30.0),

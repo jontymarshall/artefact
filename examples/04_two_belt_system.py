@@ -1,9 +1,10 @@
 """Example 4: a two-belt system, from SED to fit to images.
 
 1. Model a star with a warm inner belt and a cold outer belt (``dtype="multi"``).
-2. Generate synthetic photometry from that model, then fit it back with lmfit to
-   recover the dust mass, size slope, minimum grain size, warm-belt mass fraction
-   and belt radii.
+2. Generate synthetic photometry from that model, then fit it back with lmfit for
+   the dust mass, size slope, minimum grain size, warm-belt mass fraction and belt
+   radii. Data and fit both use the full thermal emission calculation. ``amin`` is
+   degenerate with the other parameters, so the fit need not recover it.
 3. Image the best-fit system at wavelengths that pick out each belt.
 
 Run from anywhere:  python examples/04_two_belt_system.py [--no-show]
@@ -55,9 +56,8 @@ TRUTH = dict(
 )
 
 
-def synthetic_photometry(seed=42):
-    """Photometry (um, mJy, mJy) sampled from the true model with 5% noise."""
-    truth = run_model(two_belt_parameters(**TRUTH), emission_mode="bb")
+def synthetic_photometry(truth, seed=42):
+    """Photometry (um, mJy, mJy) sampled from the ``truth`` model with 5% noise."""
     rng = np.random.default_rng(seed)
     flux = model_at(truth, WAVELENGTHS)
     unc = 0.05 * flux
@@ -74,7 +74,7 @@ def main(show=True):
     save_figure(fig, "04_two_belt_truth.png")
 
     # --- 2. fit the synthetic photometry --------------------------------------------
-    photometry = synthetic_photometry()
+    photometry = synthetic_photometry(model)
     wave, flux, unc = photometry
     fit_mask = wave > 8.0  # the star is known; fit the infrared excess
 
@@ -87,7 +87,9 @@ def main(show=True):
     params.add("rpeak_cold", value=70.0, min=40.0, max=150.0)
 
     def residual(theta):
-        model = run_model(two_belt_parameters(**theta.valuesdict()), emission_mode="bb")
+        model = run_model(
+            two_belt_parameters(**theta.valuesdict()), emission_mode="full"
+        )
         return (model_at(model, wave[fit_mask]) - flux[fit_mask]) / unc[fit_mask]
 
     result = lmfit.minimize(residual, params, method="least_squares")
@@ -96,6 +98,9 @@ def main(show=True):
         print(
             f"{name:>14}: fit {result.params[name].value:8.3g}   true {true_value:8.3g}"
         )
+    # Nine infrared points cannot pin down all six parameters: amin trades off against
+    # the others, and lmfit's error bars (from the curvature at the best fit) miss
+    # that curved degeneracy. Sample the posterior (method="emcee") for real errors.
 
     best = run_model(two_belt_parameters(**result.params.valuesdict()))
     best.obs_wave, best.obs_flux, best.obs_uncs = photometry
@@ -107,7 +112,7 @@ def main(show=True):
     # --- 3. images of the best fit ---------------------------------------------------
     # The warm belt is ~0.3 arcsec across at 30 pc, the cold belt several arcsec, so
     # zoom in on the warm belt with a fine pixel scale (a 1.3 arcsec field of view).
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5), layout="constrained")
     show_image(
         best.make_image(
             24.0,
