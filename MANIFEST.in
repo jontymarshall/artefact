@@ -1,3 +1,5 @@
+include CHANGELOG.md CITATION.cff
+prune **/.ipynb_checkpoints
 graft tests 
 graft examples 
 graft notebooks 
